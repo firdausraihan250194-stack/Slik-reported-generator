@@ -26,7 +26,7 @@
                 </div>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight">SLIK Report Generator</h1>
-                    <p class="text-blue-100 text-sm">Automated SLIK Processing & 5-Year Payment Projection</p>
+                    <p class="text-blue-100 text-sm">Automated SLIK Processing, 5-Year Payment Projection & Summary</p>
                 </div>
             </div>
         </div>
@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Proyeksi angsuran 60 bulan (5 tahun) dibuat berdasarkan data angsuran aktual SLIK.</p>
+                <p class="text-xs text-slate-400">Sheet 'Analisis_SLIK' dan Sheet baru 'Summary_Fasilitas' berhasil dibuat.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -130,6 +130,7 @@
             const startYear = currentDate.getFullYear();
             const startMonth = currentDate.getMonth();
 
+            // Proyeksi 60 Bulan (5 Tahun)
             const monthHeaders = [];
             const monthDates = [];
             const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -141,15 +142,23 @@
                 monthHeaders.push(label);
             }
 
+            // ==========================================
+            // SHEET 1: Analisis_SLIK
+            // ==========================================
             const templateData = [];
-            const baseHeader = ["", "LJK", "Fac Type", "Start Date", "End Date", "Plafond (Pokok)", "Tenor (bulan)", "Sisa Tenor", "Outstanding", "Inst./Bulan", "Int. Flat (%)", "Int. Eff (%)", "last CL.", "Worst CL.", "Denda"];
+            const baseHeader = ["LJK", "Fac Type", "Condition", "Start Date", "End Date", "Plafond (Pokok)", "Tenor (bulan)", "Sisa Tenor", "Outstanding", "Inst./Bulan", "Int. Flat (%)", "Int. Eff (%)", "last CL.", "Worst CL.", "Denda"];
             const fullHeader = baseHeader.concat(monthHeaders);
             templateData.push(fullHeader);
+
+            const facTypesSet = new Set();
 
             rawData.forEach((row, idx) => {
                 const r = idx + 2;
                 const ljk = row["LJK"] || "-";
-                const facType = row["FAC. TYPE"] || "-";
+                const facType = row["FAC. TYPE"] || "Lainnya";
+                facTypesSet.add(facType);
+
+                const condition = row["KONDISI"] || row["CONDITION"] || row["KONDISI / KETERANGAN"] || row["STATUS"] || "Fasilitas Aktif";
                 const startDate = formatDateForExcel(row["START DATE"]);
                 const endDate = formatDateForExcel(row["END DATE"]);
                 
@@ -166,7 +175,7 @@
                 const flatFormula = `=IF(OR(F${r}=0, G${r}=0), 0, IF((J${r}*G${r})<F${r}, (J${r}*12)/F${r}, ((J${r}*G${r}) - F${r})/F${r} * (12/G${r})))`;
 
                 const rowArray = [
-                    null, ljk, facType, startDate, endDate, 
+                    ljk, facType, condition, startDate, endDate, 
                     plafon, 
                     { f: tenorFormula }, 
                     { f: sisaTenorFormula }, 
@@ -186,7 +195,7 @@
 
             const lastRowIndex = rawData.length + 1;
             const totalRow = [
-                null, "Grand Total", null, null, null,
+                "Grand Total", null, null, null, null,
                 { f: `SUM(F2:F${lastRowIndex})` }, null, null,
                 { f: `SUM(I2:I${lastRowIndex})` },
                 { f: `SUM(J2:J${lastRowIndex})` },
@@ -203,13 +212,13 @@
 
             const newWs = XLSX.utils.aoa_to_sheet(templateData);
             
-            const range = XLSX.utils.decode_range(newWs['!ref']);
-            for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+            const range1 = XLSX.utils.decode_range(newWs['!ref']);
+            for (let R = range1.s.r + 1; R <= range1.e.r; ++R) {
                 ['F', 'I', 'J', 'O'].forEach(col => {
                     let cellRef = col + (R + 1);
                     if (newWs[cellRef]) newWs[cellRef].z = '#,##0';
                 });
-                for (let C = 15; C <= range.e.c; ++C) {
+                for (let C = 15; C <= range1.e.c; ++C) {
                     let cellRef = XLSX.utils.encode_cell({r: R, c: C});
                     if (newWs[cellRef]) newWs[cellRef].z = '#,##0';
                 }
@@ -219,8 +228,73 @@
                 });
             }
 
+            // ==========================================
+            // SHEET 2: Summary_Fasilitas
+            // ==========================================
+            const summaryData = [];
+            const summaryHeader = [
+                "Fasilitas type", 
+                "Total Plafond", 
+                "Total Outstanding", 
+                "Total Installment", 
+                "Total Denda", 
+                "Total Worst Cl", 
+                "Total Last Cl"
+            ];
+            summaryData.push(summaryHeader);
+
+            const uniqueFacTypes = Array.from(facTypesSet);
+
+            uniqueFacTypes.forEach((fac, idx) => {
+                const sr = idx + 2;
+                
+                const sumPlafond = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!F2:F${lastRowIndex})`;
+                const sumOS = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!I2:I${lastRowIndex})`;
+                const sumInst = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!J2:J${lastRowIndex})`;
+                const sumDenda = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!O2:O${lastRowIndex})`;
+                
+                const maxWorstCl = `=MAXIFS(Analisis_SLIK!N2:N${lastRowIndex}, Analisis_SLIK!B2:B${lastRowIndex}, A${sr})`;
+                const maxLastCl = `=MAXIFS(Analisis_SLIK!M2:M${lastRowIndex}, Analisis_SLIK!B2:B${lastRowIndex}, A${sr})`;
+
+                summaryData.push([
+                    fac,
+                    { f: sumPlafond },
+                    { f: sumOS },
+                    { f: sumInst },
+                    { f: sumDenda },
+                    { f: maxWorstCl },
+                    { f: maxLastCl }
+                ]);
+            });
+
+            const lastSummaryRow = uniqueFacTypes.length + 1;
+            summaryData.push([
+                "Grand Total",
+                { f: `SUM(B2:B${lastSummaryRow})` },
+                { f: `SUM(C2:C${lastSummaryRow})` },
+                { f: `SUM(D2:D${lastSummaryRow})` },
+                { f: `SUM(E2:E${lastSummaryRow})` },
+                { f: `MAX(F2:F${lastSummaryRow})` },
+                { f: `MAX(G2:G${lastSummaryRow})` }
+            ]);
+
+            const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+
+            const range2 = XLSX.utils.decode_range(summaryWs['!ref']);
+            for (let R = range2.s.r + 1; R <= range2.e.r; ++R) {
+                ['B', 'C', 'D', 'E'].forEach(col => {
+                    let cellRef = col + (R + 1);
+                    if (summaryWs[cellRef]) summaryWs[cellRef].z = '#,##0';
+                });
+                ['F', 'G'].forEach(col => {
+                    let cellRef = col + (R + 1);
+                    if (summaryWs[cellRef]) summaryWs[cellRef].z = '0';
+                });
+            }
+
             const newWb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(newWb, newWs, "Analisis_SLIK");
+            XLSX.utils.book_append_sheet(newWb, summaryWs, "Summary_Fasilitas");
 
             let userFileName = document.getElementById('customFileName').value.trim();
             if(!userFileName) userFileName = "Generated SLIK";
