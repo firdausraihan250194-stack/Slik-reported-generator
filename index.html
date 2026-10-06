@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SLIK Report Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (XLSX) CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4 md:p-8">
+
+    <div class="max-w-4xl w-full bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 overflow-hidden">
+        <!-- Header Banner -->
+        <div class="bg-gradient-to-r from-blue-700 to-indigo-800 p-6 md:p-8 text-white">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="p-2.5 bg-white/10 rounded-xl backdrop-blur-md">
+                    <svg class="w-7 h-7 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight">SLIK Report Generator</h1>
+                    <p class="text-blue-100 text-sm">Automated SLIK Processing & 5-Year Payment Projection</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="p-6 md:p-8 space-y-6">
+            
+            <!-- Custom File Name & Upload Section -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Naming Input -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Nama File Output</label>
+                    <div class="relative">
+                        <input type="text" id="customFileName" value="Generated SLIK" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-150" placeholder="Masukkan nama file..."/>
+                        <span class="absolute right-4 top-3.5 text-xs text-slate-500 font-mono">.xlsx</span>
+                    </div>
+                </div>
+
+                <!-- File Uploader -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Unggah File Mentah SLIK</label>
+                    <input type="file" id="fileInput" accept=".xls,.xlsx" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 file:cursor-pointer cursor-pointer bg-slate-900 border border-slate-700 rounded-xl p-1 transition"/>
+                </div>
+            </div>
+
+            <!-- Generate Button -->
+            <button onclick="processAndGenerate()" id="btnGenerate" disabled class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-3.5 px-6 rounded-xl shadow-lg transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                <span>Proses & Buat Link Download</span>
+            </button>
+
+            <!-- Result Link Area -->
+            <div id="resultArea" class="hidden bg-slate-900/80 border border-slate-700/80 rounded-2xl p-6 text-center space-y-4">
+                <div class="inline-flex items-center justify-center w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-full mb-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
+                <p class="text-xs text-slate-400">Proyeksi angsuran 60 bulan (5 tahun) dibuat berdasarkan data angsuran aktual SLIK.</p>
+
+                <!-- Download Link Button -->
+                <div class="pt-2">
+                    <a id="downloadLink" href="#" class="inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition duration-200 text-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        <span id="linkLabel">Unduh File</span>
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let rawData = [];
+        const fileInput = document.getElementById('fileInput');
+        const btnGenerate = document.getElementById('btnGenerate');
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, {type: 'array', cellDates: true});
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    rawData = XLSX.utils.sheet_to_json(firstSheet, {raw: true});
+
+                    if(rawData.length > 0) {
+                        btnGenerate.disabled = false;
+                    }
+                } catch (err) {
+                    alert("Gagal membaca file: " + err.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function parseNum(val) {
+            if (val === undefined || val === null || val === '') return 0;
+            if (typeof val === 'number') return val;
+            let str = String(val).replace(/[^0-9.-]/g, '');
+            return parseFloat(str) || 0;
+        }
+
+        function formatDateForExcel(val) {
+            if (!val) return '';
+            let d = new Date(val);
+            if (isNaN(d.getTime())) {
+                let parts = String(val).split('/');
+                if(parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                return String(val);
+            }
+            return d.toISOString().split('T')[0];
+        }
+
+        function processAndGenerate() {
+            if (rawData.length === 0) return;
+
+            const currentDate = new Date();
+            const startYear = currentDate.getFullYear();
+            const startMonth = currentDate.getMonth();
+
+            const monthHeaders = [];
+            const monthDates = [];
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+            for(let i=0; i<60; i++) {
+                let d = new Date(startYear, startMonth + i, 1);
+                monthDates.push(d);
+                let label = `${monthNames[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
+                monthHeaders.push(label);
+            }
+
+            const templateData = [];
+            const baseHeader = ["", "LJK", "Fac Type", "Start Date", "End Date", "Plafond (Pokok)", "Tenor (bulan)", "Sisa Tenor", "Outstanding", "Inst./Bulan", "Int. Flat (%)", "Int. Eff (%)", "last CL.", "Worst CL.", "Denda"];
+            const fullHeader = baseHeader.concat(monthHeaders);
+            templateData.push(fullHeader);
+
+            rawData.forEach((row, idx) => {
+                const r = idx + 2;
+                const ljk = row["LJK"] || "-";
+                const facType = row["FAC. TYPE"] || "-";
+                const startDate = formatDateForExcel(row["START DATE"]);
+                const endDate = formatDateForExcel(row["END DATE"]);
+                
+                const plafon = parseNum(row["PLAFON AWAL"]);
+                const os = parseNum(row["OUTSTANDING"]);
+                const inst = parseNum(row["INSTALLMENT"]);
+                const intRate = parseNum(row["INT. (%)"]);
+                const lastCl = parseNum(row["LAST CL."]) || 1;
+                const worstCl = parseNum(row["WORST CL."]) || 1;
+                const denda = parseNum(row["DENDA"]);
+
+                const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
+                const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
+                const flatFormula = `=IF(OR(F${r}=0, G${r}=0), 0, IF((J${r}*G${r})<F${r}, (J${r}*12)/F${r}, ((J${r}*G${r}) - F${r})/F${r} * (12/G${r})))`;
+
+                const rowArray = [
+                    null, ljk, facType, startDate, endDate, 
+                    plafon, 
+                    { f: tenorFormula }, 
+                    { f: sisaTenorFormula }, 
+                    os, inst, 
+                    { f: flatFormula }, 
+                    intRate / 100,
+                    lastCl, worstCl, denda
+                ];
+
+                monthDates.forEach((mDate) => {
+                    const scheduleFormula = `=IF(AND(DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) >= DATE(YEAR(DATEVALUE(D${r})),MONTH(DATEVALUE(D${r})),1), DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) <= DATEVALUE(E${r})), $J${r}, 0)`;
+                    rowArray.push({ f: scheduleFormula });
+                });
+
+                templateData.push(rowArray);
+            });
+
+            const lastRowIndex = rawData.length + 1;
+            const totalRow = [
+                null, "Grand Total", null, null, null,
+                { f: `SUM(F2:F${lastRowIndex})` }, null, null,
+                { f: `SUM(I2:I${lastRowIndex})` },
+                { f: `SUM(J2:J${lastRowIndex})` },
+                null, null, null, null,
+                { f: `SUM(O2:O${lastRowIndex})` }
+            ];
+
+            monthHeaders.forEach((_, mIdx) => {
+                const colLetter = XLSX.utils.encode_col(15 + mIdx);
+                totalRow.push({ f: `SUM(${colLetter}2:${colLetter}${lastRowIndex})` });
+            });
+
+            templateData.push(totalRow);
+
+            const newWs = XLSX.utils.aoa_to_sheet(templateData);
+            
+            const range = XLSX.utils.decode_range(newWs['!ref']);
+            for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+                ['F', 'I', 'J', 'O'].forEach(col => {
+                    let cellRef = col + (R + 1);
+                    if (newWs[cellRef]) newWs[cellRef].z = '#,##0';
+                });
+                for (let C = 15; C <= range.e.c; ++C) {
+                    let cellRef = XLSX.utils.encode_cell({r: R, c: C});
+                    if (newWs[cellRef]) newWs[cellRef].z = '#,##0';
+                }
+                ['K', 'L'].forEach(col => {
+                    let cellRef = col + (R + 1);
+                    if (newWs[cellRef]) newWs[cellRef].z = '0.00%';
+                });
+            }
+
+            const newWb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(newWb, newWs, "Analisis_SLIK");
+
+            let userFileName = document.getElementById('customFileName').value.trim();
+            if(!userFileName) userFileName = "Generated SLIK";
+            if(!userFileName.endsWith('.xlsx')) userFileName += '.xlsx';
+
+            const wbout = XLSX.write(newWb, {bookType:'xlsx', type:'binary'});
+            function s2ab(s) {
+                const buf = new ArrayBuffer(s.length);
+                const view = new Uint8Array(buf);
+                for (let i=0; i<s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+                return buf;
+            }
+            const blob = new Blob([s2ab(wbout)], {type:"application/octet-stream"});
+            const url = URL.createObjectURL(blob);
+
+            const downloadLink = document.getElementById('downloadLink');
+            const linkLabel = document.getElementById('linkLabel');
+            downloadLink.href = url;
+            downloadLink.download = userFileName;
+            linkLabel.textContent = `Unduh "${userFileName}"`;
+
+            document.getElementById('resultArea').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
