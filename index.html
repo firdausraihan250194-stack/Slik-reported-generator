@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Sheet 'Analisis_SLIK' dan Sheet baru 'Summary_Fasilitas' berhasil dibuat.</p>
+                <p class="text-xs text-slate-400">Sheet 'Analisis_SLIK' dan Sheet 'Summary_Fasilitas' berhasil diperbarui.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -150,13 +150,16 @@
             const fullHeader = baseHeader.concat(monthHeaders);
             templateData.push(fullHeader);
 
-            const facTypesSet = new Set();
+            const facTypesMap = {};
 
             rawData.forEach((row, idx) => {
                 const r = idx + 2;
                 const ljk = row["LJK"] || "-";
-                const facType = row["FAC. TYPE"] || "Lainnya";
-                facTypesSet.add(facType);
+                
+                // 1. Ambil Fac Type murni sesuai data mentahan
+                let rawFacType = row["FAC. TYPE"] || row["FACILITY TYPE"] || row["FASILITAS TYPE"] || "";
+                rawFacType = String(rawFacType).trim();
+                if (!rawFacType) rawFacType = "Lainnya";
 
                 const condition = row["KONDISI"] || row["CONDITION"] || row["KONDISI / KETERANGAN"] || row["STATUS"] || "Fasilitas Aktif";
                 const startDate = formatDateForExcel(row["START DATE"]);
@@ -170,12 +173,20 @@
                 const worstCl = parseNum(row["WORST CL."]) || 1;
                 const denda = parseNum(row["DENDA"]);
 
+                // Logika MAX terhitung otomatis per Fac Type
+                if (!facTypesMap[rawFacType]) {
+                    facTypesMap[rawFacType] = { maxWorstCl: worstCl, maxLastCl: lastCl };
+                } else {
+                    facTypesMap[rawFacType].maxWorstCl = Math.max(facTypesMap[rawFacType].maxWorstCl, worstCl);
+                    facTypesMap[rawFacType].maxLastCl = Math.max(facTypesMap[rawFacType].maxLastCl, lastCl);
+                }
+
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
                 const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
                 const flatFormula = `=IF(OR(F${r}=0, G${r}=0), 0, IF((J${r}*G${r})<F${r}, (J${r}*12)/F${r}, ((J${r}*G${r}) - F${r})/F${r} * (12/G${r})))`;
 
                 const rowArray = [
-                    ljk, facType, condition, startDate, endDate, 
+                    ljk, rawFacType, condition, startDate, endDate, 
                     plafon, 
                     { f: tenorFormula }, 
                     { f: sisaTenorFormula }, 
@@ -232,18 +243,20 @@
             // SHEET 2: Summary_Fasilitas
             // ==========================================
             const summaryData = [];
+            
+            // 2. Sub Header "Worst Cl" dan "Last Cl"
             const summaryHeader = [
                 "Fasilitas type", 
                 "Total Plafond", 
                 "Total Outstanding", 
                 "Total Installment", 
                 "Total Denda", 
-                "Total Worst Cl", 
-                "Total Last Cl"
+                "Worst Cl", 
+                "Last Cl"
             ];
             summaryData.push(summaryHeader);
 
-            const uniqueFacTypes = Array.from(facTypesSet);
+            const uniqueFacTypes = Object.keys(facTypesMap);
 
             uniqueFacTypes.forEach((fac, idx) => {
                 const sr = idx + 2;
@@ -253,8 +266,9 @@
                 const sumInst = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!J2:J${lastRowIndex})`;
                 const sumDenda = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!O2:O${lastRowIndex})`;
                 
-                const maxWorstCl = `=MAXIFS(Analisis_SLIK!N2:N${lastRowIndex}, Analisis_SLIK!B2:B${lastRowIndex}, A${sr})`;
-                const maxLastCl = `=MAXIFS(Analisis_SLIK!M2:M${lastRowIndex}, Analisis_SLIK!B2:B${lastRowIndex}, A${sr})`;
+                // Menampilkan nilai MAX yang valid tanpa memicu kesalahan #NAME?
+                const valWorstCl = facTypesMap[fac].maxWorstCl;
+                const valLastCl = facTypesMap[fac].maxLastCl;
 
                 summaryData.push([
                     fac,
@@ -262,11 +276,12 @@
                     { f: sumOS },
                     { f: sumInst },
                     { f: sumDenda },
-                    { f: maxWorstCl },
-                    { f: maxLastCl }
+                    valWorstCl,
+                    valLastCl
                 ]);
             });
 
+            // Grand Total Summary
             const lastSummaryRow = uniqueFacTypes.length + 1;
             summaryData.push([
                 "Grand Total",
@@ -280,12 +295,14 @@
 
             const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
 
+            // Format Numbering Angka
             const range2 = XLSX.utils.decode_range(summaryWs['!ref']);
             for (let R = range2.s.r + 1; R <= range2.e.r; ++R) {
                 ['B', 'C', 'D', 'E'].forEach(col => {
                     let cellRef = col + (R + 1);
                     if (summaryWs[cellRef]) summaryWs[cellRef].z = '#,##0';
                 });
+                // Format angka sederhana tanpa desimal
                 ['F', 'G'].forEach(col => {
                     let cellRef = col + (R + 1);
                     if (summaryWs[cellRef]) summaryWs[cellRef].z = '0';
