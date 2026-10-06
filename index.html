@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Data sampah/invalid telah dibersihkan & seluruh kondisi fasilitas telah terakumulasi secara presisi.</p>
+                <p class="text-xs text-slate-400">Grand Total kini menggunakan rumus SUBTOTAL sehingga otomatis menyesuaikan saat di-filter.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -151,13 +151,12 @@
             templateData.push(fullHeader);
 
             const facTypesMap = {};
-            let validRowIndex = 2; // Counter baris valid di Excel
+            let validRowIndex = 2;
 
             rawData.forEach((row) => {
                 const ljkRaw = row["LJK"] || "";
                 const facTypeRaw = row["FAC. TYPE"] || row["FACILITY TYPE"] || row["FASILITAS TYPE"] || "";
                 
-                // FILTER DATA INVALID (Pembersihan Baris Kosong / Total / Angka Sampah):
                 if (!ljkRaw && !facTypeRaw) return;
                 if (String(ljkRaw).toLowerCase().includes("total") || String(ljkRaw).toLowerCase().includes("grand")) return;
                 if (!isNaN(ljkRaw) && !facTypeRaw) return;
@@ -180,7 +179,6 @@
                 const worstCl = parseNum(row["WORST CL."]) || 1;
                 const denda = parseNum(row["DENDA"]);
 
-                // Agregasi nilai MAX per Fac Type
                 if (!facTypesMap[rawFacType]) {
                     facTypesMap[rawFacType] = { maxWorstCl: worstCl, maxLastCl: lastCl };
                 } else {
@@ -188,7 +186,6 @@
                     facTypesMap[rawFacType].maxLastCl = Math.max(facTypesMap[rawFacType].maxLastCl, lastCl);
                 }
 
-                // Rumus Excel yang aman dari kesalahan #VALUE!
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
                 const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
                 const flatFormula = `=IF(OR(F${r}=0, G${r}=0), 0, IF((J${r}*G${r})<F${r}, (J${r}*12)/F${r}, ((J${r}*G${r}) - F${r})/F${r} * (12/G${r})))`;
@@ -204,7 +201,6 @@
                     lastCl, worstCl, denda
                 ];
 
-                // Angsuran murni bulanan
                 monthDates.forEach((mDate) => {
                     const scheduleFormula = `=IF(OR(D${r}="", E${r}=""), 0, IF(AND(DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) >= DATE(YEAR(DATEVALUE(D${r})),MONTH(DATEVALUE(D${r})),1), DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) <= DATEVALUE(E${r})), $J${r}, 0))`;
                     rowArray.push({ f: scheduleFormula });
@@ -214,24 +210,30 @@
             });
 
             const lastRowIndex = validRowIndex - 1;
+            
+            // PENGGUNAAN RUMUS SUBTOTAL(9, RANGE):
+            // Rumus ini membuat Grand Total hanya menjumlahkan baris yang TERLIHAT (Filtered) di Excel!
             const totalRow = [
                 "Grand Total", null, null, null, null,
-                { f: `SUM(F2:F${lastRowIndex})` }, null, null,
-                { f: `SUM(I2:I${lastRowIndex})` },
-                { f: `SUM(J2:J${lastRowIndex})` },
+                { f: `SUBTOTAL(9, F2:F${lastRowIndex})` }, null, null,
+                { f: `SUBTOTAL(9, I2:I${lastRowIndex})` },
+                { f: `SUBTOTAL(9, J2:J${lastRowIndex})` },
                 null, null, null, null,
-                { f: `SUM(O2:O${lastRowIndex})` }
+                { f: `SUBTOTAL(9, O2:O${lastRowIndex})` }
             ];
 
             monthHeaders.forEach((_, mIdx) => {
                 const colLetter = XLSX.utils.encode_col(15 + mIdx);
-                totalRow.push({ f: `SUM(${colLetter}2:${colLetter}${lastRowIndex})` });
+                totalRow.push({ f: `SUBTOTAL(9, ${colLetter}2:${colLetter}${lastRowIndex})` });
             });
 
             templateData.push(totalRow);
 
             const newWs = XLSX.utils.aoa_to_sheet(templateData);
             
+            // Auto-filter di Excel agar pengguna langsung bisa mem-filter kolom Condition
+            newWs['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(14 + monthHeaders.length)}${lastRowIndex}` };
+
             // Format Cell Numbering Sheet 1
             const range1 = XLSX.utils.decode_range(newWs['!ref']);
             for (let R = range1.s.r + 1; R <= range1.e.r; ++R) {
@@ -270,7 +272,6 @@
             uniqueFacTypes.forEach((fac, idx) => {
                 const sr = idx + 2;
                 
-                // MENGGABUNGKAN SELURUH KONDISI FASILITAS
                 const sumPlafond = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!F2:F${lastRowIndex})`;
                 const sumOS = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!I2:I${lastRowIndex})`;
                 const sumInst = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!J2:J${lastRowIndex})`;
