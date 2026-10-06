@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Sheet 'Analisis_SLIK' dan Sheet 'Summary_Fasilitas' berhasil diperbarui.</p>
+                <p class="text-xs text-slate-400">Data sampah/invalid telah dibersihkan & seluruh kondisi fasilitas telah terakumulasi secara presisi.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -151,15 +151,22 @@
             templateData.push(fullHeader);
 
             const facTypesMap = {};
+            let validRowIndex = 2; // Counter baris valid di Excel
 
-            rawData.forEach((row, idx) => {
-                const r = idx + 2;
-                const ljk = row["LJK"] || "-";
+            rawData.forEach((row) => {
+                const ljkRaw = row["LJK"] || "";
+                const facTypeRaw = row["FAC. TYPE"] || row["FACILITY TYPE"] || row["FASILITAS TYPE"] || "";
                 
-                // 1. Ambil Fac Type murni sesuai data mentahan
-                let rawFacType = row["FAC. TYPE"] || row["FACILITY TYPE"] || row["FASILITAS TYPE"] || "";
-                rawFacType = String(rawFacType).trim();
-                if (!rawFacType) rawFacType = "Lainnya";
+                // FILTER DATA INVALID (Pembersihan Baris Kosong / Total / Angka Sampah):
+                if (!ljkRaw && !facTypeRaw) return;
+                if (String(ljkRaw).toLowerCase().includes("total") || String(ljkRaw).toLowerCase().includes("grand")) return;
+                if (!isNaN(ljkRaw) && !facTypeRaw) return;
+
+                const r = validRowIndex;
+                validRowIndex++;
+
+                const ljk = String(ljkRaw).trim() || "-";
+                let rawFacType = String(facTypeRaw).trim() || "Lainnya";
 
                 const condition = row["KONDISI"] || row["CONDITION"] || row["KONDISI / KETERANGAN"] || row["STATUS"] || "Fasilitas Aktif";
                 const startDate = formatDateForExcel(row["START DATE"]);
@@ -173,7 +180,7 @@
                 const worstCl = parseNum(row["WORST CL."]) || 1;
                 const denda = parseNum(row["DENDA"]);
 
-                // Logika MAX terhitung otomatis per Fac Type
+                // Agregasi nilai MAX per Fac Type
                 if (!facTypesMap[rawFacType]) {
                     facTypesMap[rawFacType] = { maxWorstCl: worstCl, maxLastCl: lastCl };
                 } else {
@@ -181,6 +188,7 @@
                     facTypesMap[rawFacType].maxLastCl = Math.max(facTypesMap[rawFacType].maxLastCl, lastCl);
                 }
 
+                // Rumus Excel yang aman dari kesalahan #VALUE!
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
                 const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
                 const flatFormula = `=IF(OR(F${r}=0, G${r}=0), 0, IF((J${r}*G${r})<F${r}, (J${r}*12)/F${r}, ((J${r}*G${r}) - F${r})/F${r} * (12/G${r})))`;
@@ -196,15 +204,16 @@
                     lastCl, worstCl, denda
                 ];
 
+                // Angsuran murni bulanan
                 monthDates.forEach((mDate) => {
-                    const scheduleFormula = `=IF(AND(DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) >= DATE(YEAR(DATEVALUE(D${r})),MONTH(DATEVALUE(D${r})),1), DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) <= DATEVALUE(E${r})), $J${r}, 0)`;
+                    const scheduleFormula = `=IF(OR(D${r}="", E${r}=""), 0, IF(AND(DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) >= DATE(YEAR(DATEVALUE(D${r})),MONTH(DATEVALUE(D${r})),1), DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) <= DATEVALUE(E${r})), $J${r}, 0))`;
                     rowArray.push({ f: scheduleFormula });
                 });
 
                 templateData.push(rowArray);
             });
 
-            const lastRowIndex = rawData.length + 1;
+            const lastRowIndex = validRowIndex - 1;
             const totalRow = [
                 "Grand Total", null, null, null, null,
                 { f: `SUM(F2:F${lastRowIndex})` }, null, null,
@@ -223,6 +232,7 @@
 
             const newWs = XLSX.utils.aoa_to_sheet(templateData);
             
+            // Format Cell Numbering Sheet 1
             const range1 = XLSX.utils.decode_range(newWs['!ref']);
             for (let R = range1.s.r + 1; R <= range1.e.r; ++R) {
                 ['F', 'I', 'J', 'O'].forEach(col => {
@@ -244,7 +254,6 @@
             // ==========================================
             const summaryData = [];
             
-            // 2. Sub Header "Worst Cl" dan "Last Cl"
             const summaryHeader = [
                 "Fasilitas type", 
                 "Total Plafond", 
@@ -261,12 +270,12 @@
             uniqueFacTypes.forEach((fac, idx) => {
                 const sr = idx + 2;
                 
+                // MENGGABUNGKAN SELURUH KONDISI FASILITAS
                 const sumPlafond = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!F2:F${lastRowIndex})`;
                 const sumOS = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!I2:I${lastRowIndex})`;
                 const sumInst = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!J2:J${lastRowIndex})`;
                 const sumDenda = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!O2:O${lastRowIndex})`;
                 
-                // Menampilkan nilai MAX yang valid tanpa memicu kesalahan #NAME?
                 const valWorstCl = facTypesMap[fac].maxWorstCl;
                 const valLastCl = facTypesMap[fac].maxLastCl;
 
@@ -295,14 +304,13 @@
 
             const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
 
-            // Format Numbering Angka
+            // Format Numbering Summary
             const range2 = XLSX.utils.decode_range(summaryWs['!ref']);
             for (let R = range2.s.r + 1; R <= range2.e.r; ++R) {
                 ['B', 'C', 'D', 'E'].forEach(col => {
                     let cellRef = col + (R + 1);
                     if (summaryWs[cellRef]) summaryWs[cellRef].z = '#,##0';
                 });
-                // Format angka sederhana tanpa desimal
                 ['F', 'G'].forEach(col => {
                     let cellRef = col + (R + 1);
                     if (summaryWs[cellRef]) summaryWs[cellRef].z = '0';
