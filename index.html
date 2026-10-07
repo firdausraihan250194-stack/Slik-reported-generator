@@ -1,378 +1,75 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SLIK Report Generator</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SheetJS (XLSX) CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SLIK Report Generator</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900/85 bg-blend-overlay bg-cover bg-center bg-fixed text-slate-100 min-h-screen flex items-center justify-center p-4 md:p-8" style="background-image: url('Gambar_4K_Jernih.jpg');">
+<body 
+  class="bg-slate-900/85 bg-blend-overlay bg-cover bg-center bg-fixed text-slate-100 min-h-screen flex items-center justify-center p-4 md:p-8" 
+  style="background-image: url('Gambar_4K_Jernih.jpg');">
 
-    <div class="max-w-4xl w-full bg-slate-800/90 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/80 overflow-hidden">
-        <!-- Header Banner -->
-        <div class="bg-gradient-to-r from-blue-700/90 to-indigo-800/90 p-6 md:p-8 text-white backdrop-blur-md">
-            <div class="flex items-center gap-3 mb-2">
-                <div class="p-2.5 bg-white/10 rounded-xl backdrop-blur-md">
-                    <svg class="w-7 h-7 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold tracking-tight">SLIK Report Generator</h1>
-                    <p class="text-blue-100 text-sm">Automated SLIK Processing, 5-Year Payment Projection & Summary</p>
-                </div>
-            </div>
+  <!-- Main Card Container -->
+  <main class="w-full max-w-3xl bg-slate-800/90 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/50 overflow-hidden">
+    
+    <!-- Header Section -->
+    <header class="bg-blue-600/30 p-6 md:p-8 border-b border-slate-700/50 flex items-center gap-4">
+      <div class="p-3 bg-blue-600/40 rounded-xl text-blue-400">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold text-white tracking-tight">SLIK Report Generator</h1>
+        <p class="text-sm md:text-base text-slate-300 mt-1">Automated SLIK Processing, 5-Year Payment Projection & Summary</p>
+      </div>
+    </header>
+
+    <!-- Form Content -->
+    <div class="p-6 md:p-8 space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Input Nama File Output -->
+        <div>
+          <label class="block text-xs font-bold tracking-wider text-slate-400 uppercase mb-2">Nama File Output</label>
+          <div class="relative flex items-center">
+            <input 
+              type="text" 
+              value="Generated SLIK" 
+              class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-blue-500 transition-colors pr-16"
+            />
+            <span class="absolute right-4 text-sm text-slate-500 font-mono">.xlsx</span>
+          </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="p-6 md:p-8 space-y-6">
-            
-            <!-- Custom File Name & Upload Section -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Naming Input -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Nama File Output</label>
-                    <div class="relative">
-                        <input type="text" id="customFileName" value="Generated SLIK" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-150" placeholder="Masukkan nama file..."/>
-                        <span class="absolute right-4 top-3.5 text-xs text-slate-500 font-mono">.xlsx</span>
-                    </div>
-                </div>
-
-                <!-- File Uploader -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Unggah File Mentah SLIK</label>
-                    <input type="file" id="fileInput" accept=".xls,.xlsx" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 file:cursor-pointer cursor-pointer bg-slate-900/90 border border-slate-700 rounded-xl p-1 transition"/>
-                </div>
-            </div>
-
-            <!-- Generate Button -->
-            <button onclick="processAndGenerate()" id="btnGenerate" disabled class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-3.5 px-6 rounded-xl shadow-lg transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                <span>Proses & Buat Link Download</span>
-            </button>
-
-            <!-- Result Link Area -->
-            <div id="resultArea" class="hidden bg-slate-900/90 border border-slate-700/80 rounded-2xl p-6 text-center space-y-4 backdrop-blur-md">
-                <div class="inline-flex items-center justify-center w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-full mb-1">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                </div>
-                <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Plafond Induk dikelompokkan via END DATE & Installment tenor &le; 12 bulan otomatis menghitung Bunga Bulanan.</p>
-
-                <!-- Download Link Button -->
-                <div class="pt-2">
-                    <a id="downloadLink" href="#" class="inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition duration-200 text-sm">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                        <span id="linkLabel">Unduh File</span>
-                    </a>
-                </div>
-            </div>
-
+        <!-- Upload File Mentah -->
+        <div>
+          <label class="block text-xs font-bold tracking-wider text-slate-400 uppercase mb-2">Unggah File Mentah SLIK</label>
+          <div class="flex items-center bg-slate-900/80 border border-slate-700 rounded-lg overflow-hidden p-1">
+            <label class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-md transition-colors shrink-0">
+              Choose File
+              <input type="file" class="hidden" />
+            </label>
+            <span class="text-sm text-slate-400 px-3 truncate">No file chosen</span>
+          </div>
         </div>
+
+      </div>
+
+      <!-- Submit Button -->
+      <button 
+        type="button" 
+        class="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-medium py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        Proses & Buat Link Download
+      </button>
     </div>
 
-    <script>
-        let rawData = [];
-        const fileInput = document.getElementById('fileInput');
-        const btnGenerate = document.getElementById('btnGenerate');
+  </main>
 
-        fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                try {
-                    const data = new Uint8Array(evt.target.result);
-                    const workbook = XLSX.read(data, {type: 'array', cellDates: true});
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    rawData = XLSX.utils.sheet_to_json(firstSheet, {raw: true});
-
-                    if(rawData.length > 0) {
-                        btnGenerate.disabled = false;
-                    }
-                } catch (err) {
-                    alert("Gagal membaca file: " + err.message);
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        });
-
-        function parseNum(val) {
-            if (val === undefined || val === null || val === '') return 0;
-            if (typeof val === 'number') return val;
-            let str = String(val).replace(/[^0-9.-]/g, '');
-            return parseFloat(str) || 0;
-        }
-
-        function formatDateForExcel(val) {
-            if (!val) return '';
-            let d = new Date(val);
-            if (isNaN(d.getTime())) {
-                let parts = String(val).split('/');
-                if(parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-                return String(val);
-            }
-            return d.toISOString().split('T')[0];
-        }
-
-        function calculateTenorMonths(sDateStr, eDateStr) {
-            if (!sDateStr || !eDateStr) return 0;
-            let d1 = new Date(sDateStr);
-            let d2 = new Date(eDateStr);
-            if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 0;
-            return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
-        }
-
-        function processAndGenerate() {
-            if (rawData.length === 0) return;
-
-            const currentDate = new Date();
-            const startYear = currentDate.getFullYear();
-            const startMonth = currentDate.getMonth();
-
-            // Proyeksi 60 Bulan (5 Tahun)
-            const monthHeaders = [];
-            const monthDates = [];
-            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-            for(let i=0; i<60; i++) {
-                let d = new Date(startYear, startMonth + i, 1);
-                monthDates.push(d);
-                let label = `${monthNames[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
-                monthHeaders.push(label);
-            }
-
-            // ==========================================
-            // SHEET 1: Analisis_SLIK
-            // ==========================================
-            const templateData = [];
-            const baseHeader = ["LJK", "Fac Type", "Condition", "Start Date", "End Date", "Plafond (Pokok)", "Tenor (bulan)", "Sisa Tenor", "Outstanding", "Inst./Bulan", "Int. Flat (%)", "Int. Eff (%)", "last CL.", "Worst CL.", "Denda"];
-            const fullHeader = baseHeader.concat(monthHeaders);
-            templateData.push(fullHeader);
-
-            const facTypesMap = {};
-            let validRowIndex = 2;
-
-            rawData.forEach((row) => {
-                const ljkRaw = row["LJK"] || "";
-                const facTypeRaw = row["FAC. TYPE"] || row["FACILITY TYPE"] || row["FASILITAS TYPE"] || "";
-                
-                if (!ljkRaw && !facTypeRaw) return;
-                if (String(ljkRaw).toLowerCase().includes("total") || String(ljkRaw).toLowerCase().includes("grand")) return;
-                if (!isNaN(ljkRaw) && !facTypeRaw) return;
-
-                const r = validRowIndex;
-                validRowIndex++;
-
-                const ljk = String(ljkRaw).trim() || "-";
-                let rawFacType = String(facTypeRaw).trim() || "Lainnya";
-
-                const condition = row["KONDISI"] || row["CONDITION"] || row["KONDISI / KETERANGAN"] || row["STATUS"] || "Fasilitas Aktif";
-                const startDate = formatDateForExcel(row["START DATE"]);
-                const endDate = formatDateForExcel(row["END DATE"]);
-                
-                const plafon = parseNum(row["PLAFON AWAL"]);
-                const os = parseNum(row["OUTSTANDING"]);
-                const rawInst = parseNum(row["INSTALLMENT"]);
-                const intRate = parseNum(row["INT. (%)"]);
-                const lastCl = parseNum(row["LAST CL."]) || 1;
-                const worstCl = parseNum(row["WORST CL."]) || 1;
-                const denda = parseNum(row["DENDA"]);
-
-                // 1. DEDUPLIKASI KONTRAK INDUK REVOLVING (Berdasarkan LJK + FAC TYPE + PLAFON + END DATE)
-                const masterContractKey = `${ljk}_${rawFacType}_${plafon}_${endDate}`;
-
-                if (!facTypesMap[rawFacType]) {
-                    facTypesMap[rawFacType] = {
-                        masterContracts: {},
-                        maxWorstCl: worstCl,
-                        maxLastCl: lastCl
-                    };
-                }
-
-                if (!facTypesMap[rawFacType].masterContracts[masterContractKey]) {
-                    facTypesMap[rawFacType].masterContracts[masterContractKey] = plafon;
-                }
-
-                facTypesMap[rawFacType].maxWorstCl = Math.max(facTypesMap[rawFacType].maxWorstCl, worstCl);
-                facTypesMap[rawFacType].maxLastCl = Math.max(facTypesMap[rawFacType].maxLastCl, lastCl);
-
-                // 2. HITUNG TENOR & PENYESUAIAN INSTALLMENT (BUNGA SAJA JIKA TENOR <= 12 BULAN)
-                const tenorMonths = calculateTenorMonths(startDate, endDate);
-                
-                let effectiveInst = rawInst;
-                if (tenorMonths > 0 && tenorMonths <= 12) {
-                    // Jika Tenor <= 12 Bulan: Hitung Bunga Bulanan = (Outstanding * Rate / 100) / 12
-                    effectiveInst = Math.round((os * (intRate / 100)) / 12);
-                } else if (rawInst === 0 && os > 0 && intRate > 0) {
-                    // Cadangan jika Installment di mentahan kosong/0
-                    effectiveInst = Math.round((os * (intRate / 100)) / 12);
-                }
-
-                const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
-                const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
-                const flatFormula = `=IF(OR(F${r}=0, G${r}=0), 0, IF((J${r}*G${r})<F${r}, (J${r}*12)/F${r}, ((J${r}*G${r}) - F${r})/F${r} * (12/G${r})))`;
-
-                const rowArray = [
-                    ljk, rawFacType, condition, startDate, endDate, 
-                    plafon, 
-                    { f: tenorFormula }, 
-                    { f: sisaTenorFormula }, 
-                    os, 
-                    effectiveInst, 
-                    { f: flatFormula }, 
-                    intRate / 100,
-                    lastCl, worstCl, denda
-                ];
-
-                monthDates.forEach((mDate) => {
-                    const scheduleFormula = `=IF(OR(D${r}="", E${r}=""), 0, IF(AND(DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) >= DATE(YEAR(DATEVALUE(D${r})),MONTH(DATEVALUE(D${r})),1), DATE(${mDate.getFullYear()},${mDate.getMonth()+1},1) <= DATEVALUE(E${r})), $J${r}, 0))`;
-                    rowArray.push({ f: scheduleFormula });
-                });
-
-                templateData.push(rowArray);
-            });
-
-            const lastRowIndex = validRowIndex - 1;
-            
-            const totalRow = [
-                "Grand Total", null, null, null, null,
-                { f: `SUBTOTAL(9, F2:F${lastRowIndex})` }, null, null,
-                { f: `SUBTOTAL(9, I2:I${lastRowIndex})` },
-                { f: `SUBTOTAL(9, J2:J${lastRowIndex})` },
-                null, null, null, null,
-                { f: `SUBTOTAL(9, O2:O${lastRowIndex})` }
-            ];
-
-            monthHeaders.forEach((_, mIdx) => {
-                const colLetter = XLSX.utils.encode_col(15 + mIdx);
-                totalRow.push({ f: `SUBTOTAL(9, ${colLetter}2:${colLetter}${lastRowIndex})` });
-            });
-
-            templateData.push(totalRow);
-
-            const newWs = XLSX.utils.aoa_to_sheet(templateData);
-            newWs['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(14 + monthHeaders.length)}${lastRowIndex}` };
-
-            const range1 = XLSX.utils.decode_range(newWs['!ref']);
-            for (let R = range1.s.r + 1; R <= range1.e.r; ++R) {
-                ['F', 'I', 'J', 'O'].forEach(col => {
-                    let cellRef = col + (R + 1);
-                    if (newWs[cellRef]) newWs[cellRef].z = '#,##0';
-                });
-                for (let C = 15; C <= range1.e.c; ++C) {
-                    let cellRef = XLSX.utils.encode_cell({r: R, c: C});
-                    if (newWs[cellRef]) newWs[cellRef].z = '#,##0';
-                }
-                ['K', 'L'].forEach(col => {
-                    let cellRef = col + (R + 1);
-                    if (newWs[cellRef]) newWs[cellRef].z = '0.00%';
-                });
-            }
-
-            // ==========================================
-            // SHEET 2: Summary_Fasilitas
-            // ==========================================
-            const summaryData = [];
-            
-            const summaryHeader = [
-                "Fasilitas type", 
-                "Total Plafond", 
-                "Total Outstanding", 
-                "Total Installment", 
-                "Total Denda", 
-                "Worst Cl", 
-                "Last Cl"
-            ];
-            summaryData.push(summaryHeader);
-
-            const uniqueFacTypes = Object.keys(facTypesMap);
-
-            uniqueFacTypes.forEach((fac, idx) => {
-                const sr = idx + 2;
-                
-                // Total Plafond Induk Unik
-                const masterContractsObj = facTypesMap[fac].masterContracts;
-                const totalDeduplicatedPlafond = Object.values(masterContractsObj).reduce((a, b) => a + b, 0);
-
-                const sumOS = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!I2:I${lastRowIndex})`;
-                const sumInst = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!J2:J${lastRowIndex})`;
-                const sumDenda = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!O2:O${lastRowIndex})`;
-                
-                const valWorstCl = facTypesMap[fac].maxWorstCl;
-                const valLastCl = facTypesMap[fac].maxLastCl;
-
-                summaryData.push([
-                    fac,
-                    totalDeduplicatedPlafond,
-                    { f: sumOS },
-                    { f: sumInst },
-                    { f: sumDenda },
-                    valWorstCl,
-                    valLastCl
-                ]);
-            });
-
-            // Grand Total Summary
-            const lastSummaryRow = uniqueFacTypes.length + 1;
-            summaryData.push([
-                "Grand Total",
-                { f: `SUM(B2:B${lastSummaryRow})` },
-                { f: `SUM(C2:C${lastSummaryRow})` },
-                { f: `SUM(D2:D${lastSummaryRow})` },
-                { f: `SUM(E2:E${lastSummaryRow})` },
-                { f: `MAX(F2:F${lastSummaryRow})` },
-                { f: `MAX(G2:G${lastSummaryRow})` }
-            ]);
-
-            const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-
-            const range2 = XLSX.utils.decode_range(summaryWs['!ref']);
-            for (let R = range2.s.r + 1; R <= range2.e.r; ++R) {
-                ['B', 'C', 'D', 'E'].forEach(col => {
-                    let cellRef = col + (R + 1);
-                    if (summaryWs[cellRef]) summaryWs[cellRef].z = '#,##0';
-                });
-                ['F', 'G'].forEach(col => {
-                    let cellRef = col + (R + 1);
-                    if (summaryWs[cellRef]) summaryWs[cellRef].z = '0';
-                });
-            }
-
-            const newWb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(newWb, newWs, "Analisis_SLIK");
-            XLSX.utils.book_append_sheet(newWb, summaryWs, "Summary_Fasilitas");
-
-            let userFileName = document.getElementById('customFileName').value.trim();
-            if(!userFileName) userFileName = "Generated SLIK";
-            if(!userFileName.endsWith('.xlsx')) userFileName += '.xlsx';
-
-            const wbout = XLSX.write(newWb, {bookType:'xlsx', type:'binary'});
-            function s2ab(s) {
-                const buf = new ArrayBuffer(s.length);
-                const view = new Uint8Array(buf);
-                for (let i=0; i<s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
-                return buf;
-            }
-            const blob = new Blob([s2ab(wbout)], {type:"application/octet-stream"});
-            const url = URL.createObjectURL(blob);
-
-            const downloadLink = document.getElementById('downloadLink');
-            const linkLabel = document.getElementById('linkLabel');
-            downloadLink.href = url;
-            downloadLink.download = userFileName;
-            linkLabel.textContent = `Unduh "${userFileName}"`;
-
-            document.getElementById('resultArea').classList.remove('hidden');
-        }
-    </script>
 </body>
 </html>
