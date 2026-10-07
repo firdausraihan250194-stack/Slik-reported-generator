@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Grand Total kini menggunakan rumus SUBTOTAL sehingga otomatis menyesuaikan saat di-filter.</p>
+                <p class="text-xs text-slate-400">Plafond Induk dikelompokkan via END DATE & Installment tenor &le; 12 bulan otomatis menghitung Bunga Bulanan.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -123,6 +123,14 @@
             return d.toISOString().split('T')[0];
         }
 
+        function calculateTenorMonths(sDateStr, eDateStr) {
+            if (!sDateStr || !eDateStr) return 0;
+            let d1 = new Date(sDateStr);
+            let d2 = new Date(eDateStr);
+            if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 0;
+            return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+        }
+
         function processAndGenerate() {
             if (rawData.length === 0) return;
 
@@ -173,17 +181,40 @@
                 
                 const plafon = parseNum(row["PLAFON AWAL"]);
                 const os = parseNum(row["OUTSTANDING"]);
-                const inst = parseNum(row["INSTALLMENT"]);
+                const rawInst = parseNum(row["INSTALLMENT"]);
                 const intRate = parseNum(row["INT. (%)"]);
                 const lastCl = parseNum(row["LAST CL."]) || 1;
                 const worstCl = parseNum(row["WORST CL."]) || 1;
                 const denda = parseNum(row["DENDA"]);
 
+                // 1. DEDUPLIKASI KONTRAK INDUK REVOLVING (Berdasarkan LJK + FAC TYPE + PLAFON + END DATE)
+                const masterContractKey = `${ljk}_${rawFacType}_${plafon}_${endDate}`;
+
                 if (!facTypesMap[rawFacType]) {
-                    facTypesMap[rawFacType] = { maxWorstCl: worstCl, maxLastCl: lastCl };
-                } else {
-                    facTypesMap[rawFacType].maxWorstCl = Math.max(facTypesMap[rawFacType].maxWorstCl, worstCl);
-                    facTypesMap[rawFacType].maxLastCl = Math.max(facTypesMap[rawFacType].maxLastCl, lastCl);
+                    facTypesMap[rawFacType] = {
+                        masterContracts: {},
+                        maxWorstCl: worstCl,
+                        maxLastCl: lastCl
+                    };
+                }
+
+                if (!facTypesMap[rawFacType].masterContracts[masterContractKey]) {
+                    facTypesMap[rawFacType].masterContracts[masterContractKey] = plafon;
+                }
+
+                facTypesMap[rawFacType].maxWorstCl = Math.max(facTypesMap[rawFacType].maxWorstCl, worstCl);
+                facTypesMap[rawFacType].maxLastCl = Math.max(facTypesMap[rawFacType].maxLastCl, lastCl);
+
+                // 2. HITUNG TENOR & PENYESUAIAN INSTALLMENT (BUNGA SAJA JIKA TENOR <= 12 BULAN)
+                const tenorMonths = calculateTenorMonths(startDate, endDate);
+                
+                let effectiveInst = rawInst;
+                if (tenorMonths > 0 && tenorMonths <= 12) {
+                    // Jika Tenor <= 12 Bulan: Hitung Bunga Bulanan = (Outstanding * Rate / 100) / 12
+                    effectiveInst = Math.round((os * (intRate / 100)) / 12);
+                } else if (rawInst === 0 && os > 0 && intRate > 0) {
+                    // Cadangan jika Installment di mentahan kosong/0
+                    effectiveInst = Math.round((os * (intRate / 100)) / 12);
                 }
 
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
@@ -195,7 +226,8 @@
                     plafon, 
                     { f: tenorFormula }, 
                     { f: sisaTenorFormula }, 
-                    os, inst, 
+                    os, 
+                    effectiveInst, // Installment Bunga (bila tenor <= 12 bln) atau Aktual
                     { f: flatFormula }, 
                     intRate / 100,
                     lastCl, worstCl, denda
@@ -211,8 +243,6 @@
 
             const lastRowIndex = validRowIndex - 1;
             
-            // PENGGUNAAN RUMUS SUBTOTAL(9, RANGE):
-            // Rumus ini membuat Grand Total hanya menjumlahkan baris yang TERLIHAT (Filtered) di Excel!
             const totalRow = [
                 "Grand Total", null, null, null, null,
                 { f: `SUBTOTAL(9, F2:F${lastRowIndex})` }, null, null,
@@ -230,11 +260,8 @@
             templateData.push(totalRow);
 
             const newWs = XLSX.utils.aoa_to_sheet(templateData);
-            
-            // Auto-filter di Excel agar pengguna langsung bisa mem-filter kolom Condition
             newWs['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(14 + monthHeaders.length)}${lastRowIndex}` };
 
-            // Format Cell Numbering Sheet 1
             const range1 = XLSX.utils.decode_range(newWs['!ref']);
             for (let R = range1.s.r + 1; R <= range1.e.r; ++R) {
                 ['F', 'I', 'J', 'O'].forEach(col => {
@@ -272,7 +299,10 @@
             uniqueFacTypes.forEach((fac, idx) => {
                 const sr = idx + 2;
                 
-                const sumPlafond = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!F2:F${lastRowIndex})`;
+                // Total Plafond Induk Unik
+                const masterContractsObj = facTypesMap[fac].masterContracts;
+                const totalDeduplicatedPlafond = Object.values(masterContractsObj).reduce((a, b) => a + b, 0);
+
                 const sumOS = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!I2:I${lastRowIndex})`;
                 const sumInst = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!J2:J${lastRowIndex})`;
                 const sumDenda = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!O2:O${lastRowIndex})`;
@@ -282,7 +312,7 @@
 
                 summaryData.push([
                     fac,
-                    { f: sumPlafond },
+                    totalDeduplicatedPlafond,
                     { f: sumOS },
                     { f: sumInst },
                     { f: sumDenda },
@@ -305,7 +335,6 @@
 
             const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
 
-            // Format Numbering Summary
             const range2 = XLSX.utils.decode_range(summaryWs['!ref']);
             for (let R = range2.s.r + 1; R <= range2.e.r; ++R) {
                 ['B', 'C', 'D', 'E'].forEach(col => {
