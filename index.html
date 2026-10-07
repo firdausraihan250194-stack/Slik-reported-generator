@@ -6,13 +6,32 @@
   <title>SLIK Report Generator</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-image: url('Gambar_4K_Jernih.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+      position: relative;
+    }
+    /* Layer semi-transparan hitam transparan agar tulisan tetap terbaca */
+    body::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.4); /* Opacity diturunkan jadi 40% */
+      z-index: -1;
+    }
+  </style>
 </head>
-<body 
-  class="bg-slate-900/85 bg-blend-overlay bg-cover bg-center bg-fixed text-slate-100 min-h-screen flex items-center justify-center p-4 md:p-8" 
-  style="background-image: url('Gambar_4K_Jernih.jpg');">
+<body class="text-slate-100 min-h-screen flex items-center justify-center p-4 md:p-8">
 
   <!-- Main Card Container -->
-  <main class="w-full max-w-3xl bg-slate-800/90 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/50 overflow-hidden">
+  <main class="w-full max-w-3xl bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/50 overflow-hidden relative z-10">
     
     <!-- Header Section -->
     <header class="bg-blue-600/30 p-6 md:p-8 border-b border-slate-700/50 flex items-center gap-4">
@@ -38,7 +57,7 @@
             <input 
               type="text" 
               value="Generated SLIK" 
-              class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-blue-500 transition-colors pr-16"
+              class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-blue-500 transition-colors pr-16"
             />
             <span class="absolute right-4 text-sm text-slate-500 font-mono">.xlsx</span>
           </div>
@@ -47,7 +66,7 @@
         <!-- Upload File Mentah -->
         <div>
           <label class="block text-xs font-bold tracking-wider text-slate-400 uppercase mb-2">Unggah File Mentah SLIK</label>
-          <div class="flex items-center bg-slate-900/80 border border-slate-700 rounded-lg overflow-hidden p-1">
+          <div class="flex items-center bg-slate-900/90 border border-slate-700 rounded-lg overflow-hidden p-1">
             <label class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-md transition-colors shrink-0">
               Choose File
               <input type="file" class="hidden" />
