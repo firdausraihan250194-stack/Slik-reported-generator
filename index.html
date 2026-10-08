@@ -6,8 +6,6 @@
   <title>SLIK Report Generator</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- SheetJS Library untuk Membaca & Mengolah File Excel -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     body {
       background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0f172a 100%);
@@ -16,7 +14,7 @@
 </head>
 <body class="text-slate-100 min-h-screen flex items-center justify-center p-4 md:p-8 relative overflow-hidden">
 
-  <!-- Background Glow Effects -->
+  <!-- Glow Background Effects -->
   <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none"></div>
   <div class="absolute bottom-10 right-10 w-[300px] h-[300px] bg-indigo-600/15 rounded-full blur-[100px] pointer-events-none"></div>
 
@@ -49,7 +47,6 @@
           <label class="block text-xs font-bold tracking-wider text-slate-400 uppercase mb-2">Nama File Output</label>
           <div class="relative flex items-center">
             <input 
-              id="outputFileName"
               type="text" 
               value="Generated SLIK" 
               class="w-full bg-slate-950/70 border border-slate-700/80 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all pr-16 shadow-inner"
@@ -64,9 +61,9 @@
           <div class="flex items-center bg-slate-950/70 border border-slate-700/80 rounded-xl overflow-hidden p-1 shadow-inner">
             <label class="cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-all shrink-0 shadow-md">
               Choose File
-              <input id="fileInput" type="file" accept=".xlsx, .xls, .csv" class="hidden" />
+              <input type="file" class="hidden" />
             </label>
-            <span id="fileNameDisplay" class="text-sm text-slate-400 px-3 truncate font-medium">No file chosen</span>
+            <span class="text-sm text-slate-400 px-3 truncate font-medium">No file chosen</span>
           </div>
         </div>
 
@@ -74,7 +71,6 @@
 
       <!-- Submit Button -->
       <button 
-        id="processBtn"
         type="button" 
         class="w-full mt-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -82,74 +78,9 @@
         </svg>
         Proses & Buat Link Download
       </button>
-      
-      <!-- Status Message Area -->
-      <div id="statusMessage" class="hidden text-center text-sm font-medium py-2 rounded-lg"></div>
     </div>
 
   </main>
-
-  <!-- Logika JavaScript Interaktif -->
-  <script>
-    const fileInput = document.getElementById('fileInput');
-    const fileNameDisplay = document.getElementById('fileNameDisplay');
-    const processBtn = document.getElementById('processBtn');
-    const outputFileName = document.getElementById('outputFileName');
-    const statusMessage = document.getElementById('statusMessage');
-
-    let uploadedWorkbook = null;
-
-    // 1. Tampilkan Nama File saat Pengguna Memilih File
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        fileNameDisplay.textContent = file.name;
-        fileNameDisplay.classList.remove('text-slate-400');
-        fileNameDisplay.classList.add('text-slate-200');
-
-        // Baca file menggunakan SheetJS
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          const data = new Uint8Array(evt.target.result);
-          uploadedWorkbook = XLSX.read(data, { type: 'array' });
-          showStatus('File berhasil dimuat! Klik tombol proses untuk mengunduh.', 'text-emerald-400');
-        };
-        reader.readAsArrayBuffer(file);
-      } else {
-        fileNameDisplay.textContent = 'No file chosen';
-        uploadedWorkbook = null;
-      }
-    });
-
-    // 2. Proses File dan Unduh Kembali ketika Tombol Diklik
-    processBtn.addEventListener('click', () => {
-      if (!uploadedWorkbook) {
-        showStatus('Harap unggah file mentah SLIK (.xlsx) terlebih dahulu!', 'text-amber-400');
-        return;
-      }
-
-      try {
-        // Ambil nama file kustom
-        let customName = outputFileName.value.trim() || 'Generated SLIK';
-        if (!customName.endsWith('.xlsx')) {
-          customName += '.xlsx';
-        }
-
-        // Ekspor / Unduh kembali Workbook Excel
-        XLSX.writeFile(uploadedWorkbook, customName);
-        showStatus('File berhasil diproses dan diunduh!', 'text-emerald-400');
-      } catch (err) {
-        console.error(err);
-        showStatus('Gagal memproses file. Pastikan format Excel valid.', 'text-rose-400');
-      }
-    });
-
-    function showStatus(text, colorClass) {
-      statusMessage.textContent = text;
-      statusMessage.className = `text-center text-sm font-medium py-2 rounded-lg ${colorClass}`;
-      statusMessage.classList.remove('hidden');
-    }
-  </script>
 
 </body>
 </html>
