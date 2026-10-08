@@ -6,6 +6,8 @@
   <title>SLIK Report Generator</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS Library untuk Membaca & Membuat File Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     body {
       background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0f172a 100%);
@@ -47,6 +49,7 @@
           <label class="block text-xs font-bold tracking-wider text-slate-400 uppercase mb-2">Nama File Output</label>
           <div class="relative flex items-center">
             <input 
+              id="outputFileName"
               type="text" 
               value="Generated SLIK" 
               class="w-full bg-slate-950/70 border border-slate-700/80 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all pr-16 shadow-inner"
@@ -61,9 +64,9 @@
           <div class="flex items-center bg-slate-950/70 border border-slate-700/80 rounded-xl overflow-hidden p-1 shadow-inner">
             <label class="cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-all shrink-0 shadow-md">
               Choose File
-              <input type="file" class="hidden" />
+              <input id="fileInput" type="file" accept=".xlsx, .xls, .csv" class="hidden" />
             </label>
-            <span class="text-sm text-slate-400 px-3 truncate font-medium">No file chosen</span>
+            <span id="fileNameDisplay" class="text-sm text-slate-400 px-3 truncate font-medium">No file chosen</span>
           </div>
         </div>
 
@@ -71,6 +74,7 @@
 
       <!-- Submit Button -->
       <button 
+        id="processBtn"
         type="button" 
         class="w-full mt-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -78,9 +82,125 @@
         </svg>
         Proses & Buat Link Download
       </button>
+
+      <!-- Status Notifikasi -->
+      <div id="statusMessage" class="hidden text-center text-sm font-medium p-3 rounded-xl border"></div>
     </div>
 
   </main>
+
+  <!-- Skrip Pemrosesan Data SLIK -->
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const processBtn = document.getElementById('processBtn');
+    const outputFileName = document.getElementById('outputFileName');
+    const statusMessage = document.getElementById('statusMessage');
+
+    let uploadedRawData = null;
+
+    // 1. Deteksi saat file dipilih
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        fileNameDisplay.textContent = file.name;
+        fileNameDisplay.classList.replace('text-slate-400', 'text-slate-200');
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            
+            // Mengambil sheet pertama
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            
+            // Konversi sheet ke data JSON
+            uploadedRawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            
+            showStatus('File mentah SLIK berhasil dimuat! Siap diproses.', 'success');
+          } catch (err) {
+            console.error(err);
+            showStatus('Gagal membaca file Excel. Pastikan format file valid.', 'error');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        fileNameDisplay.textContent = 'No file chosen';
+        uploadedRawData = null;
+      }
+    });
+
+    // 2. Pemrosesan Data & Generate File Excel Baru
+    processBtn.addEventListener('click', () => {
+      if (!uploadedRawData || uploadedRawData.length === 0) {
+        showStatus('Harap pilih file mentah SLIK terlebih dahulu!', 'warning');
+        return;
+      }
+
+      showStatus('Sedang memproses data SLIK...', 'info');
+
+      setTimeout(() => {
+        try {
+          // Buat Workbook & Sheet baru
+          const newWorkbook = XLSX.utils.book_new();
+
+          /* 
+            Catatan: Di bawah ini adalah struktur dasar tabel output SLIK. 
+            Kamu bisa meletakkan logika transformasi data/proyeksi 5 tahun kamu di sini.
+          */
+          let processedData = [];
+
+          // Menggunakan data mentah yang ada atau menyusun header default jika diperlukan
+          if (uploadedRawData.length > 0) {
+            processedData = uploadedRawData;
+          } else {
+            processedData = [
+              ["No", "Nama Fasilitas", "Plafon", "Baki Debet", "Kualitas", "Proyeksi Angsuran"],
+              [1, "Kredit Pemilikan Rumah (KPR)", 500000000, 450000000, "1 - Lancar", 4500000]
+            ];
+          }
+
+          const newWorksheet = XLSX.utils.aoa_to_sheet(processedData);
+          XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, "SLIK Summary");
+
+          // Nama File Output
+          let fileName = outputFileName.value.trim() || 'Generated SLIK';
+          if (!fileName.endsWith('.xlsx')) {
+            fileName += '.xlsx';
+          }
+
+          // Unduh File
+          XLSX.writeFile(newWorkbook, fileName);
+          showStatus('File SLIK berhasil diproses dan diunduh!', 'success');
+
+        } catch (error) {
+          console.error(error);
+          showStatus('Terjadi kesalahan saat memproses data.', 'error');
+        }
+      }, 500);
+    });
+
+    // Fungsi Pembantu Tampilan Status Notifikasi
+    function showStatus(message, type) {
+      statusMessage.textContent = message;
+      statusMessage.classList.remove('hidden', 'bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400', 
+                                    'bg-amber-500/10', 'border-amber-500/30', 'text-amber-400', 
+                                    'bg-rose-500/10', 'border-rose-500/30', 'text-rose-400',
+                                    'bg-blue-500/10', 'border-blue-500/30', 'text-blue-400');
+
+      if (type === 'success') {
+        statusMessage.classList.add('bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400');
+      } else if (type === 'warning') {
+        statusMessage.classList.add('bg-amber-500/10', 'border-amber-500/30', 'text-amber-400');
+      } else if (type === 'error') {
+        statusMessage.classList.add('bg-rose-500/10', 'border-rose-500/30', 'text-rose-400');
+      } else {
+        statusMessage.classList.add('bg-blue-500/10', 'border-blue-500/30', 'text-blue-400');
+      }
+    }
+  </script>
 
 </body>
 </html>
