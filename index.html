@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Plafond Induk dikelompokkan via END DATE & Installment tenor &le; 12 bulan otomatis menghitung Bunga Bulanan.</p>
+                <p class="text-xs text-slate-400">Plafond Induk dikelompokkan via END DATE & Summary dipisah menjadi Fasilitas Aktif & Lunas.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -154,12 +154,12 @@
             // SHEET 1: Analisis_SLIK
             // ==========================================
             const templateData = [];
-            // Penambahan header Ovd_Days setelah Worst CL.
             const baseHeader = ["LJK", "Fac Type", "Condition", "Start Date", "End Date", "Plafond (Pokok)", "Tenor (bulan)", "Sisa Tenor", "Outstanding", "Inst./Bulan", "Int. Flat (%)", "Int. Eff (%)", "last CL.", "Worst CL.", "Ovd_Days", "Denda"];
             const fullHeader = baseHeader.concat(monthHeaders);
             templateData.push(fullHeader);
 
-            const facTypesMap = {};
+            const facTypesMapAktif = {};
+            const facTypesMapLunas = {};
             let validRowIndex = 2;
 
             rawData.forEach((row) => {
@@ -176,7 +176,7 @@
                 const ljk = String(ljkRaw).trim() || "-";
                 let rawFacType = String(facTypeRaw).trim() || "Lainnya";
 
-                const condition = row["KONDISI"] || row["CONDITION"] || row["KONDISI / KETERANGAN"] || row["STATUS"] || "Fasilitas Aktif";
+                const condition = String(row["KONDISI"] || row["CONDITION"] || row["KONDISI / KETERANGAN"] || row["STATUS"] || "Fasilitas Aktif").trim();
                 const startDate = formatDateForExcel(row["START DATE"]);
                 const endDate = formatDateForExcel(row["END DATE"]);
                 
@@ -186,28 +186,28 @@
                 const intRate = parseNum(row["INT. (%)"]);
                 const lastCl = parseNum(row["LAST CL."]) || 1;
                 const worstCl = parseNum(row["WORST CL."]) || 1;
-                const ovdDays = parseNum(row["OVD"] || row["OVD_DAYS"] || row["OVD DAYS"]); // Membaca data OVD dari mentahan
+                const ovdDays = parseNum(row["OVD"] || row["OVD_DAYS"] || row["OVD DAYS"]);
                 const denda = parseNum(row["DENDA"]);
 
-                // 1. DEDUPLIKASI KONTRAK INDUK REVOLVING
                 const masterContractKey = `${ljk}_${rawFacType}_${plafon}_${endDate}`;
+                const isLunas = condition.toLowerCase().includes("lunas");
+                const targetMap = isLunas ? facTypesMapLunas : facTypesMapAktif;
 
-                if (!facTypesMap[rawFacType]) {
-                    facTypesMap[rawFacType] = {
+                if (!targetMap[rawFacType]) {
+                    targetMap[rawFacType] = {
                         masterContracts: {},
                         maxWorstCl: worstCl,
                         maxLastCl: lastCl
                     };
                 }
 
-                if (!facTypesMap[rawFacType].masterContracts[masterContractKey]) {
-                    facTypesMap[rawFacType].masterContracts[masterContractKey] = plafon;
+                if (!targetMap[rawFacType].masterContracts[masterContractKey]) {
+                    targetMap[rawFacType].masterContracts[masterContractKey] = plafon;
                 }
 
-                facTypesMap[rawFacType].maxWorstCl = Math.max(facTypesMap[rawFacType].maxWorstCl, worstCl);
-                facTypesMap[rawFacType].maxLastCl = Math.max(facTypesMap[rawFacType].maxLastCl, lastCl);
+                targetMap[rawFacType].maxWorstCl = Math.max(targetMap[rawFacType].maxWorstCl, worstCl);
+                targetMap[rawFacType].maxLastCl = Math.max(targetMap[rawFacType].maxLastCl, lastCl);
 
-                // 2. HITUNG TENOR & PENYESUAIAN INSTALLMENT
                 const tenorMonths = calculateTenorMonths(startDate, endDate);
                 
                 let effectiveInst = rawInst;
@@ -249,11 +249,11 @@
                 { f: `SUBTOTAL(9, I2:I${lastRowIndex})` },
                 { f: `SUBTOTAL(9, J2:J${lastRowIndex})` },
                 null, null, null, null, null,
-                { f: `SUBTOTAL(9, P2:P${lastRowIndex})` } // Kolom Denda berpindah dari O ke P
+                { f: `SUBTOTAL(9, P2:P${lastRowIndex})` }
             ];
 
             monthHeaders.forEach((_, mIdx) => {
-                const colLetter = XLSX.utils.encode_col(16 + mIdx); // Kolom proyeksi bulanan dimulai dari Q (indeks 16)
+                const colLetter = XLSX.utils.encode_col(16 + mIdx);
                 totalRow.push({ f: `SUBTOTAL(9, ${colLetter}2:${colLetter}${lastRowIndex})` });
             });
 
@@ -292,57 +292,112 @@
                 "Worst Cl", 
                 "Last Cl"
             ];
+
+            // ------------------------------------------
+            // TABEL 1: FASILITAS AKTIF
+            // ------------------------------------------
+            summaryData.push(["Fasilitas Aktif"]);
             summaryData.push(summaryHeader);
 
-            const uniqueFacTypes = Object.keys(facTypesMap);
+            const uniqueFacAktif = Object.keys(facTypesMapAktif);
+            const startRowAktif = 3;
 
-            uniqueFacTypes.forEach((fac, idx) => {
-                const sr = idx + 2;
+            uniqueFacAktif.forEach((fac, idx) => {
+                const sr = startRowAktif + idx;
+                const totalDeduplicatedPlafond = Object.values(facTypesMapAktif[fac].masterContracts).reduce((a, b) => a + b, 0);
+
+                const sumOS = `=SUMIFS(Analisis_SLIK!I$2:I$${lastRowIndex}, Analisis_SLIK!B$2:B$${lastRowIndex}, A${sr}, Analisis_SLIK!C$2:C$${lastRowIndex}, "<>*Lunas*")`;
+                const sumInst = `=SUMIFS(Analisis_SLIK!J$2:J$${lastRowIndex}, Analisis_SLIK!B$2:B$${lastRowIndex}, A${sr}, Analisis_SLIK!C$2:C$${lastRowIndex}, "<>*Lunas*")`;
+                const sumDenda = `=SUMIFS(Analisis_SLIK!P$2:P$${lastRowIndex}, Analisis_SLIK!B$2:B$${lastRowIndex}, A${sr}, Analisis_SLIK!C$2:C$${lastRowIndex}, "<>*Lunas*")`;
                 
-                const masterContractsObj = facTypesMap[fac].masterContracts;
-                const totalDeduplicatedPlafond = Object.values(masterContractsObj).reduce((a, b) => a + b, 0);
-
-                const sumOS = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!I2:I${lastRowIndex})`;
-                const sumInst = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!J2:J${lastRowIndex})`;
-                const sumDenda = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!P2:P${lastRowIndex})`; // SUMIF Denda mengacu ke kolom P
-                
-                const valWorstCl = facTypesMap[fac].maxWorstCl;
-                const valLastCl = facTypesMap[fac].maxLastCl;
-
                 summaryData.push([
                     fac,
                     totalDeduplicatedPlafond,
                     { f: sumOS },
                     { f: sumInst },
                     { f: sumDenda },
-                    valWorstCl,
-                    valLastCl
+                    facTypesMapAktif[fac].maxWorstCl,
+                    facTypesMapAktif[fac].maxLastCl
                 ]);
             });
 
-            // Grand Total Summary
-            const lastSummaryRow = uniqueFacTypes.length + 1;
-            summaryData.push([
-                "Grand Total",
-                { f: `SUM(B2:B${lastSummaryRow})` },
-                { f: `SUM(C2:C${lastSummaryRow})` },
-                { f: `SUM(D2:D${lastSummaryRow})` },
-                { f: `SUM(E2:E${lastSummaryRow})` },
-                { f: `MAX(F2:F${lastSummaryRow})` },
-                { f: `MAX(G2:G${lastSummaryRow})` }
-            ]);
+            const endRowAktifData = startRowAktif + uniqueFacAktif.length - 1;
+            const grandTotalAktifRow = endRowAktifData + 1;
+
+            if (uniqueFacAktif.length > 0) {
+                summaryData.push([
+                    "Grand Total Aktif",
+                    { f: `SUM(B${startRowAktif}:B${endRowAktifData})` },
+                    { f: `SUM(C${startRowAktif}:C${endRowAktifData})` },
+                    { f: `SUM(D${startRowAktif}:D${endRowAktifData})` },
+                    { f: `SUM(E${startRowAktif}:E${endRowAktifData})` },
+                    { f: `MAX(F${startRowAktif}:F${endRowAktifData})` },
+                    { f: `MAX(G${startRowAktif}:G${endRowAktifData})` }
+                ]);
+            } else {
+                summaryData.push(["Grand Total Aktif", 0, 0, 0, 0, 0, 0]);
+            }
+
+            // ------------------------------------------
+            // TABEL 2: FASILITAS LUNAS
+            // ------------------------------------------
+            summaryData.push([]); // Baris Kosong
+            summaryData.push(["Fasilitas Lunas"]);
+            summaryData.push(summaryHeader);
+
+            const uniqueFacLunas = Object.keys(facTypesMapLunas);
+            const startRowLunas = grandTotalAktifRow + 3;
+
+            uniqueFacLunas.forEach((fac, idx) => {
+                const sr = startRowLunas + idx;
+                const totalDeduplicatedPlafond = Object.values(facTypesMapLunas[fac].masterContracts).reduce((a, b) => a + b, 0);
+
+                const sumOS = `=SUMIFS(Analisis_SLIK!I$2:I$${lastRowIndex}, Analisis_SLIK!B$2:B$${lastRowIndex}, A${sr}, Analisis_SLIK!C$2:C$${lastRowIndex}, "*Lunas*")`;
+                const sumInst = `=SUMIFS(Analisis_SLIK!J$2:J$${lastRowIndex}, Analisis_SLIK!B$2:B$${lastRowIndex}, A${sr}, Analisis_SLIK!C$2:C$${lastRowIndex}, "*Lunas*")`;
+                const sumDenda = `=SUMIFS(Analisis_SLIK!P$2:P$${lastRowIndex}, Analisis_SLIK!B$2:B$${lastRowIndex}, A${sr}, Analisis_SLIK!C$2:C$${lastRowIndex}, "*Lunas*")`;
+                
+                summaryData.push([
+                    fac,
+                    totalDeduplicatedPlafond,
+                    { f: sumOS },
+                    { f: sumInst },
+                    { f: sumDenda },
+                    facTypesMapLunas[fac].maxWorstCl,
+                    facTypesMapLunas[fac].maxLastCl
+                ]);
+            });
+
+            const endRowLunasData = startRowLunas + uniqueFacLunas.length - 1;
+
+            if (uniqueFacLunas.length > 0) {
+                summaryData.push([
+                    "Grand Total Lunas",
+                    { f: `SUM(B${startRowLunas}:B${endRowLunasData})` },
+                    { f: `SUM(C${startRowLunas}:C${endRowLunasData})` },
+                    { f: `SUM(D${startRowLunas}:D${endRowLunasData})` },
+                    { f: `SUM(E${startRowLunas}:E${endRowLunasData})` },
+                    { f: `MAX(F${startRowLunas}:F${endRowLunasData})` },
+                    { f: `MAX(G${startRowLunas}:G${endRowLunasData})` }
+                ]);
+            } else {
+                summaryData.push(["Grand Total Lunas", 0, 0, 0, 0, 0, 0]);
+            }
 
             const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
 
             const range2 = XLSX.utils.decode_range(summaryWs['!ref']);
-            for (let R = range2.s.r + 1; R <= range2.e.r; ++R) {
+            for (let R = range2.s.r; R <= range2.e.r; ++R) {
                 ['B', 'C', 'D', 'E'].forEach(col => {
                     let cellRef = col + (R + 1);
-                    if (summaryWs[cellRef]) summaryWs[cellRef].z = '#,##0';
+                    if (summaryWs[cellRef] && typeof summaryWs[cellRef].v !== 'string') {
+                        summaryWs[cellRef].z = '#,##0';
+                    }
                 });
                 ['F', 'G'].forEach(col => {
                     let cellRef = col + (R + 1);
-                    if (summaryWs[cellRef]) summaryWs[cellRef].z = '0';
+                    if (summaryWs[cellRef] && typeof summaryWs[cellRef].v !== 'string') {
+                        summaryWs[cellRef].z = '0';
+                    }
                 });
             }
 
