@@ -154,7 +154,8 @@
             // SHEET 1: Analisis_SLIK
             // ==========================================
             const templateData = [];
-            const baseHeader = ["LJK", "Fac Type", "Condition", "Start Date", "End Date", "Plafond (Pokok)", "Tenor (bulan)", "Sisa Tenor", "Outstanding", "Inst./Bulan", "Int. Flat (%)", "Int. Eff (%)", "last CL.", "Worst CL.", "Denda"];
+            // Penambahan header Ovd_Days setelah Worst CL.
+            const baseHeader = ["LJK", "Fac Type", "Condition", "Start Date", "End Date", "Plafond (Pokok)", "Tenor (bulan)", "Sisa Tenor", "Outstanding", "Inst./Bulan", "Int. Flat (%)", "Int. Eff (%)", "last CL.", "Worst CL.", "Ovd_Days", "Denda"];
             const fullHeader = baseHeader.concat(monthHeaders);
             templateData.push(fullHeader);
 
@@ -185,6 +186,7 @@
                 const intRate = parseNum(row["INT. (%)"]);
                 const lastCl = parseNum(row["LAST CL."]) || 1;
                 const worstCl = parseNum(row["WORST CL."]) || 1;
+                const ovdDays = parseNum(row["OVD"] || row["OVD_DAYS"] || row["OVD DAYS"]); // Membaca data OVD dari mentahan
                 const denda = parseNum(row["DENDA"]);
 
                 // 1. DEDUPLIKASI KONTRAK INDUK REVOLVING
@@ -228,7 +230,7 @@
                     effectiveInst, 
                     { f: flatFormula }, 
                     intRate / 100,
-                    lastCl, worstCl, denda
+                    lastCl, worstCl, ovdDays, denda
                 ];
 
                 monthDates.forEach((mDate) => {
@@ -246,27 +248,27 @@
                 { f: `SUBTOTAL(9, F2:F${lastRowIndex})` }, null, null,
                 { f: `SUBTOTAL(9, I2:I${lastRowIndex})` },
                 { f: `SUBTOTAL(9, J2:J${lastRowIndex})` },
-                null, null, null, null,
-                { f: `SUBTOTAL(9, O2:O${lastRowIndex})` }
+                null, null, null, null, null,
+                { f: `SUBTOTAL(9, P2:P${lastRowIndex})` } // Kolom Denda berpindah dari O ke P
             ];
 
             monthHeaders.forEach((_, mIdx) => {
-                const colLetter = XLSX.utils.encode_col(15 + mIdx);
+                const colLetter = XLSX.utils.encode_col(16 + mIdx); // Kolom proyeksi bulanan dimulai dari Q (indeks 16)
                 totalRow.push({ f: `SUBTOTAL(9, ${colLetter}2:${colLetter}${lastRowIndex})` });
             });
 
             templateData.push(totalRow);
 
             const newWs = XLSX.utils.aoa_to_sheet(templateData);
-            newWs['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(14 + monthHeaders.length)}${lastRowIndex}` };
+            newWs['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(15 + monthHeaders.length)}${lastRowIndex}` };
 
             const range1 = XLSX.utils.decode_range(newWs['!ref']);
             for (let R = range1.s.r + 1; R <= range1.e.r; ++R) {
-                ['F', 'I', 'J', 'O'].forEach(col => {
+                ['F', 'I', 'J', 'O', 'P'].forEach(col => {
                     let cellRef = col + (R + 1);
                     if (newWs[cellRef]) newWs[cellRef].z = '#,##0';
                 });
-                for (let C = 15; C <= range1.e.c; ++C) {
+                for (let C = 16; C <= range1.e.c; ++C) {
                     let cellRef = XLSX.utils.encode_cell({r: R, c: C});
                     if (newWs[cellRef]) newWs[cellRef].z = '#,##0';
                 }
@@ -302,7 +304,7 @@
 
                 const sumOS = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!I2:I${lastRowIndex})`;
                 const sumInst = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!J2:J${lastRowIndex})`;
-                const sumDenda = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!O2:O${lastRowIndex})`;
+                const sumDenda = `=SUMIF(Analisis_SLIK!B2:B${lastRowIndex}, A${sr}, Analisis_SLIK!P2:P${lastRowIndex})`; // SUMIF Denda mengacu ke kolom P
                 
                 const valWorstCl = facTypesMap[fac].maxWorstCl;
                 const valLastCl = facTypesMap[fac].maxLastCl;
