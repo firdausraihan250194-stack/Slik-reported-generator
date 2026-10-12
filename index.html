@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Logika kalkulasi otomatis menyesuaikan jenis LJK (Bank Komersial vs Multifinance).</p>
+                <p class="text-xs text-slate-400">Logika kalkulasi otomatis menyesuaikan karakteristik LJK (Bank Komersial vs Multifinance).</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -216,29 +216,31 @@
                 const isMultifinance = lowerLjk.includes("finance") || lowerLjk.includes("leasing") || lowerLjk.includes("multifinance");
 
                 // ----------------------------------------------------
-                // RUMUS EXCEL DINAMIS HYBRID (SMART LOGIC)
+                // RUMUS EXCEL DINAMIS HYBRID (PERBAIKAN TOTAL)
                 // ----------------------------------------------------
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
                 const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
                 
-                // Rumus Inst./Bulan (Kolom J)
                 let instFormula = "";
+                let flatFormula = "";
+                let effFormula = "";
+
                 if (lowerFacType.includes("modal kerja") && tenorMonths <= 12) {
-                    // KMK Revolving <= 12 bln: Bunga Bulanan Saja
+                    // 1. KMK Revolving <= 12 bln (Interest Only)
                     instFormula = `=ROUND((I${r} * ${intRateRaw}) / 12, 0)`;
+                    flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, (J${r} * 12) / I${r})`;
+                    effFormula  = `=IF(OR(I${r}=0, G${r}=0, J${r}=0), 0, RATE(G${r}, -J${r}, I${r}, -I${r}) * 12)`;
                 } else if (isMultifinance) {
-                    // Multifinance: Straight Line / Flat Rate (Pokok + Bunga)
+                    // 2. Multifinance (Straight Line / Flat Rate berbasis Plafond/Outstanding)
                     instFormula = `=ROUND(IF(G${r}>0, (I${r} / G${r}) + ((I${r} * ${intRateRaw}) / 12), 0), 0)`;
+                    flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, ((J${r} * G${r}) - I${r}) / I${r} * (12 / G${r}))`;
+                    effFormula  = `=IF(OR(I${r}=0, G${r}=0, J${r}=0), 0, RATE(G${r}, -J${r}, I${r}) * 12)`;
                 } else {
-                    // Bank Komersial: Anuitas Standar OJK (PMT)
+                    // 3. Bank Komersial Term Loan (Anuitas PMT)
                     instFormula = `=ROUND(IF(G${r}>0, PMT(${intRateRaw}/12, G${r}, -I${r}), 0), 0)`;
+                    flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, ((J${r} * G${r}) - I${r}) / I${r} * (12 / G${r}))`;
+                    effFormula  = `=IF(OR(I${r}=0, G${r}=0, J${r}=0), 0, RATE(G${r}, -J${r}, I${r}) * 12)`;
                 }
-
-                // Rumus Int. Flat (%) Mandiri (Kolom K)
-                const flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, ((J${r} * G${r}) - I${r}) / I${r} * (12 / G${r}))`;
-
-                // Rumus Int. Eff (%) Mandiri via RATE Excel (Kolom L)
-                const effFormula = `=IF(OR(I${r}=0, G${r}=0, J${r}=0), 0, RATE(G${r}, -J${r}, I${r}) * 12)`;
 
                 const rowArray = [
                     ljk, rawFacType, condition, startDate, endDate, 
@@ -246,9 +248,9 @@
                     { f: tenorFormula }, 
                     { f: sisaTenorFormula }, 
                     os, 
-                    { f: instFormula },   // Inst./Bulan via Smart Hybrid Formula
-                    { f: flatFormula },    // Int. Flat Mandiri
-                    { f: effFormula },     // Int. Eff Mandiri
+                    { f: instFormula },   // Inst./Bulan
+                    { f: flatFormula },    // Int. Flat Mandiri Presisi
+                    { f: effFormula },     // Int. Eff Mandiri Presisi
                     lastCl, worstCl, ovdDays, denda
                 ];
 
