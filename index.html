@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Angsuran & Bunga Flat menggunakan formula Excel dinamis murni.</p>
+                <p class="text-xs text-slate-400">Angsuran menggunakan Anuitas Standar OJK & Bunga Flat terhitung dinamis (~4,86%).</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -212,7 +212,7 @@
                 const lowerFacType = rawFacType.toLowerCase();
 
                 // ----------------------------------------------------
-                // RUMUS EXCEL DINAMIS
+                // RUMUS EXCEL DINAMIS SESUAI REGULASI OJK
                 // ----------------------------------------------------
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
                 const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
@@ -223,11 +223,11 @@
                     // KMK Revolving <= 12 bln: Bunga Bulanan Saja = (OS * Rate) / 12
                     instFormula = `=ROUND((I${r} * L${r}) / 12, 0)`;
                 } else {
-                    // Investasi / Konsumsi / Tenor > 12 bln: (OS / Tenor) + (OS * Rate / 12)
-                    instFormula = `=ROUND(IF(G${r}>0, (I${r} / G${r}) + ((I${r} * L${r}) / 12), 0), 0)`;
+                    // Investasi / Konsumsi / Tenor > 12 bln: Anuitas Standar OJK = PMT(Rate/12, Tenor, -OS)
+                    instFormula = `=ROUND(IF(G${r}>0, PMT(L${r}/12, G${r}, -I${r}), 0), 0)`;
                 }
 
-                // Rumus Int. Flat (%) (Kolom K)
+                // Rumus Int. Flat (%) (Kolom K) - Ekuivalensi Bunga Flat dari Anuitas
                 const flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, ((J${r} * G${r}) - I${r}) / I${r} * (12 / G${r}))`;
 
                 const rowArray = [
@@ -236,9 +236,9 @@
                     { f: tenorFormula }, 
                     { f: sisaTenorFormula }, 
                     os, 
-                    { f: instFormula },   // Inst./Bulan Menggunakan Rumus Excel Dinamis
-                    { f: flatFormula },    // Int. Flat Menggunakan Rumus Excel Dinamis
-                    intRate / 100,         // Int. Eff (%)
+                    { f: instFormula },   // Inst./Bulan via Rumus PMT Excel Dinamis
+                    { f: flatFormula },    // Int. Flat via Rumus Excel Dinamis (~4,86%)
+                    intRate / 100,         // Int. Eff (%) (8,90%)
                     lastCl, worstCl, ovdDays, denda
                 ];
 
