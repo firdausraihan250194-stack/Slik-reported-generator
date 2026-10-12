@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Plafond Induk di-deduplikasi otomatis, dan angsuran masing-masing sub-fasilitas telah diproyeksikan.</p>
+                <p class="text-xs text-slate-400">Plafond Induk di-deduplikasi, angsuran Investasi/Modal Kerja/Konsumsi dihitung proporsional, & Summary dipisah Fasilitas Aktif/Lunas.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -189,7 +189,7 @@
                 const ovdDays = parseNum(row["OVD"] || row["OVD_DAYS"] || row["OVD DAYS"]);
                 const denda = parseNum(row["DENDA"]);
 
-                // Deduplikasi Plafond Induk berdasarkan LJK + Tipe Fasilitas + Besaran Plafond
+                // Deduplikasi Plafond Induk (LJK + FacType + Plafon)
                 const masterContractKey = `${ljk}_${rawFacType}_${plafon}`;
                 const isLunas = condition.toLowerCase().includes("lunas");
                 const targetMap = isLunas ? facTypesMapLunas : facTypesMapAktif;
@@ -209,13 +209,26 @@
                 targetMap[rawFacType].maxWorstCl = Math.max(targetMap[rawFacType].maxWorstCl, worstCl);
                 targetMap[rawFacType].maxLastCl = Math.max(targetMap[rawFacType].maxLastCl, lastCl);
 
-                const tenorMonths = calculateTenorMonths(startDate, endDate);
-                
-                let effectiveInst = rawInst;
-                if (tenorMonths > 0 && tenorMonths <= 12) {
+                // Hitung Tenor Bulan
+                const tenorMonths = calculateTenorMonths(startDate, endDate) || 60;
+                const lowerFacType = rawFacType.toLowerCase();
+
+                let effectiveInst = 0;
+
+                // 1. Logika Kredit Modal Kerja Revolving <= 12 Bulan (Bunga Saja)
+                if (lowerFacType.includes("modal kerja") && tenorMonths > 0 && tenorMonths <= 12) {
                     effectiveInst = Math.round((os * (intRate / 100)) / 12);
-                } else if (rawInst === 0 && os > 0 && intRate > 0) {
-                    effectiveInst = Math.round((os * (intRate / 100)) / 12);
+                } 
+                // 2. Logika Investasi, Konsumsi, atau Modal Kerja > 12 Bulan (Pokok / Tenor + Bunga)
+                else {
+                    const isRawInstInflated = (rawInst > os * 0.15) || (rawInst === 0);
+                    if (isRawInstInflated && os > 0 && tenorMonths > 0) {
+                        const pokokBln = os / tenorMonths;
+                        const bungaBln = (os * (intRate / 100)) / 12;
+                        effectiveInst = Math.round(pokokBln + bungaBln);
+                    } else {
+                        effectiveInst = rawInst;
+                    }
                 }
 
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
@@ -342,7 +355,7 @@
             // ------------------------------------------
             // TABEL 2: FASILITAS LUNAS
             // ------------------------------------------
-            summaryData.push([]); // Baris Kosong
+            summaryData.push([]); 
             summaryData.push(["Fasilitas Lunas"]);
             summaryData.push(summaryHeader);
 
