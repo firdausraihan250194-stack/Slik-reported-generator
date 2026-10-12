@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Plafond Induk di-deduplikasi, angsuran Investasi/Modal Kerja/Konsumsi dihitung proporsional, & Summary dipisah Fasilitas Aktif/Lunas.</p>
+                <p class="text-xs text-slate-400">Angsuran & Bunga Flat menggunakan formula Excel dinamis murni.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -182,7 +182,6 @@
                 
                 const plafon = parseNum(row["PLAFON AWAL"]);
                 const os = parseNum(row["OUTSTANDING"]);
-                const rawInst = parseNum(row["INSTALLMENT"]);
                 const intRate = parseNum(row["INT. (%)"]);
                 const lastCl = parseNum(row["LAST CL."]) || 1;
                 const worstCl = parseNum(row["WORST CL."]) || 1;
@@ -209,31 +208,27 @@
                 targetMap[rawFacType].maxWorstCl = Math.max(targetMap[rawFacType].maxWorstCl, worstCl);
                 targetMap[rawFacType].maxLastCl = Math.max(targetMap[rawFacType].maxLastCl, lastCl);
 
-                // Hitung Tenor Bulan
                 const tenorMonths = calculateTenorMonths(startDate, endDate) || 60;
                 const lowerFacType = rawFacType.toLowerCase();
 
-                let effectiveInst = 0;
-
-                // 1. Logika Kredit Modal Kerja Revolving <= 12 Bulan (Bunga Saja)
-                if (lowerFacType.includes("modal kerja") && tenorMonths > 0 && tenorMonths <= 12) {
-                    effectiveInst = Math.round((os * (intRate / 100)) / 12);
-                } 
-                // 2. Logika Investasi, Konsumsi, atau Modal Kerja > 12 Bulan (Pokok / Tenor + Bunga)
-                else {
-                    const isRawInstInflated = (rawInst > os * 0.15) || (rawInst === 0);
-                    if (isRawInstInflated && os > 0 && tenorMonths > 0) {
-                        const pokokBln = os / tenorMonths;
-                        const bungaBln = (os * (intRate / 100)) / 12;
-                        effectiveInst = Math.round(pokokBln + bungaBln);
-                    } else {
-                        effectiveInst = rawInst;
-                    }
-                }
-
+                // ----------------------------------------------------
+                // RUMUS EXCEL DINAMIS
+                // ----------------------------------------------------
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
                 const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
-                const flatFormula = `=IF(OR(F${r}=0, G${r}=0), 0, IF((J${r}*G${r})<F${r}, (J${r}*12)/F${r}, ((J${r}*G${r}) - F${r})/F${r} * (12/G${r})))`;
+                
+                // Rumus Inst./Bulan (Kolom J)
+                let instFormula = "";
+                if (lowerFacType.includes("modal kerja") && tenorMonths <= 12) {
+                    // KMK Revolving <= 12 bln: Bunga Bulanan Saja = (OS * Rate) / 12
+                    instFormula = `=ROUND((I${r} * L${r}) / 12, 0)`;
+                } else {
+                    // Investasi / Konsumsi / Tenor > 12 bln: (OS / Tenor) + (OS * Rate / 12)
+                    instFormula = `=ROUND(IF(G${r}>0, (I${r} / G${r}) + ((I${r} * L${r}) / 12), 0), 0)`;
+                }
+
+                // Rumus Int. Flat (%) (Kolom K)
+                const flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, ((J${r} * G${r}) - I${r}) / I${r} * (12 / G${r}))`;
 
                 const rowArray = [
                     ljk, rawFacType, condition, startDate, endDate, 
@@ -241,9 +236,9 @@
                     { f: tenorFormula }, 
                     { f: sisaTenorFormula }, 
                     os, 
-                    effectiveInst, 
-                    { f: flatFormula }, 
-                    intRate / 100,
+                    { f: instFormula },   // Inst./Bulan Menggunakan Rumus Excel Dinamis
+                    { f: flatFormula },    // Int. Flat Menggunakan Rumus Excel Dinamis
+                    intRate / 100,         // Int. Eff (%)
                     lastCl, worstCl, ovdDays, denda
                 ];
 
