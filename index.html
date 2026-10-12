@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Logika kalkulasi otomatis menyesuaikan karakteristik LJK (Bank Komersial vs Multifinance).</p>
+                <p class="text-xs text-slate-400">Logika kalkulasi otomatis disesuaikan secara akurat untuk Bank Komersial dan Multifinance.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -188,8 +188,13 @@
                 const ovdDays = parseNum(row["OVD"] || row["OVD_DAYS"] || row["OVD DAYS"]);
                 const denda = parseNum(row["DENDA"]);
 
-                // Deduplikasi Plafond Induk (LJK + FacType + Plafon)
-                const masterContractKey = `${ljk}_${rawFacType}_${plafon}`;
+                const lowerLjk = ljk.toLowerCase();
+                const isMultifinance = lowerLjk.includes("finance") || lowerLjk.includes("leasing") || lowerLjk.includes("multifinance");
+
+                // Penanganan Deduplikasi Plafond untuk Sheet Summary:
+                // - Untuk Multifinance: Setiap baris dianggap kontrak independen (Key menggunakan Row Index)
+                // - Untuk Perbankan: Deduplikasi berdasarkan LJK + FacType + Plafon Awal
+                const masterContractKey = isMultifinance ? `${ljk}_${rawFacType}_${plafon}_row${r}` : `${ljk}_${rawFacType}_${plafon}`;
                 const isLunas = condition.toLowerCase().includes("lunas");
                 const targetMap = isLunas ? facTypesMapLunas : facTypesMapAktif;
 
@@ -210,13 +215,9 @@
 
                 const tenorMonths = calculateTenorMonths(startDate, endDate) || 60;
                 const lowerFacType = rawFacType.toLowerCase();
-                const lowerLjk = ljk.toLowerCase();
-
-                // Deteksi Karakteristik LJK (Multifinance vs Bank Komersial)
-                const isMultifinance = lowerLjk.includes("finance") || lowerLjk.includes("leasing") || lowerLjk.includes("multifinance");
 
                 // ----------------------------------------------------
-                // RUMUS EXCEL DINAMIS HYBRID (PERBAIKAN TOTAL)
+                // RUMUS EXCEL DINAMIS & PRESISI
                 // ----------------------------------------------------
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
                 const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
@@ -229,17 +230,15 @@
                     // 1. KMK Revolving <= 12 bln (Interest Only)
                     instFormula = `=ROUND((I${r} * ${intRateRaw}) / 12, 0)`;
                     flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, (J${r} * 12) / I${r})`;
-                    effFormula  = `=IF(OR(I${r}=0, G${r}=0, J${r}=0), 0, RATE(G${r}, -J${r}, I${r}, -I${r}) * 12)`;
-                } else if (isMultifinance) {
-                    // 2. Multifinance (Straight Line / Flat Rate berbasis Plafond/Outstanding)
-                    instFormula = `=ROUND(IF(G${r}>0, (I${r} / G${r}) + ((I${r} * ${intRateRaw}) / 12), 0), 0)`;
-                    flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, ((J${r} * G${r}) - I${r}) / I${r} * (12 / G${r}))`;
-                    effFormula  = `=IF(OR(I${r}=0, G${r}=0, J${r}=0), 0, RATE(G${r}, -J${r}, I${r}) * 12)`;
+                    effFormula  = `=${intRateRaw}`;
                 } else {
-                    // 3. Bank Komersial Term Loan (Anuitas PMT)
+                    // 2. Kredit Berangsur / Term Loan (Bank & Multifinance)
+                    // Inst./Bulan dihitung proporsional terhadap Outstanding (I) via PMT Anuitas OJK
                     instFormula = `=ROUND(IF(G${r}>0, PMT(${intRateRaw}/12, G${r}, -I${r}), 0), 0)`;
+                    // Bunga Flat (Kolom K) dihitung ekuivalensi turunannya (menghasilkan angka lebih kecil dari Eff)
                     flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, ((J${r} * G${r}) - I${r}) / I${r} * (12 / G${r}))`;
-                    effFormula  = `=IF(OR(I${r}=0, G${r}=0, J${r}=0), 0, RATE(G${r}, -J${r}, I${r}) * 12)`;
+                    // Bunga Efektif (Kolom L) selalu menampilkan Suku Bunga Efektif Asli dari SLIK
+                    effFormula  = `=${intRateRaw}`;
                 }
 
                 const rowArray = [
@@ -249,8 +248,8 @@
                     { f: sisaTenorFormula }, 
                     os, 
                     { f: instFormula },   // Inst./Bulan
-                    { f: flatFormula },    // Int. Flat Mandiri Presisi
-                    { f: effFormula },     // Int. Eff Mandiri Presisi
+                    { f: flatFormula },    // Int. Flat Mandiri Ekuivalen
+                    { f: effFormula },     // Int. Eff Asli SLIK
                     lastCl, worstCl, ovdDays, denda
                 ];
 
