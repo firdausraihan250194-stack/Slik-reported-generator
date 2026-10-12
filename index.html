@@ -26,7 +26,7 @@
                 </div>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight">SLIK Report Generator</h1>
-                    <p class="text-blue-100 text-sm">Automated SLIK Processing, 5-Year Payment Projection & Summary</p>
+                    <p class="text-blue-100 text-sm">Automated SLIK Processing, Multi-LJK Logic (Bank & Multifinance)</p>
                 </div>
             </div>
         </div>
@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Angsuran, Bunga Flat, & Bunga Efektif dihitung mandiri menggunakan rumus Excel dinamis.</p>
+                <p class="text-xs text-slate-400">Logika kalkulasi otomatis menyesuaikan jenis LJK (Bank Komersial vs Multifinance).</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -210,9 +210,13 @@
 
                 const tenorMonths = calculateTenorMonths(startDate, endDate) || 60;
                 const lowerFacType = rawFacType.toLowerCase();
+                const lowerLjk = ljk.toLowerCase();
+
+                // Deteksi Karakteristik LJK (Multifinance vs Bank Komersial)
+                const isMultifinance = lowerLjk.includes("finance") || lowerLjk.includes("leasing") || lowerLjk.includes("multifinance");
 
                 // ----------------------------------------------------
-                // RUMUS EXCEL DINAMIS & MANDIRI
+                // RUMUS EXCEL DINAMIS HYBRID (SMART LOGIC)
                 // ----------------------------------------------------
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
                 const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
@@ -220,8 +224,13 @@
                 // Rumus Inst./Bulan (Kolom J)
                 let instFormula = "";
                 if (lowerFacType.includes("modal kerja") && tenorMonths <= 12) {
+                    // KMK Revolving <= 12 bln: Bunga Bulanan Saja
                     instFormula = `=ROUND((I${r} * ${intRateRaw}) / 12, 0)`;
+                } else if (isMultifinance) {
+                    // Multifinance: Straight Line / Flat Rate (Pokok + Bunga)
+                    instFormula = `=ROUND(IF(G${r}>0, (I${r} / G${r}) + ((I${r} * ${intRateRaw}) / 12), 0), 0)`;
                 } else {
+                    // Bank Komersial: Anuitas Standar OJK (PMT)
                     instFormula = `=ROUND(IF(G${r}>0, PMT(${intRateRaw}/12, G${r}, -I${r}), 0), 0)`;
                 }
 
@@ -237,9 +246,9 @@
                     { f: tenorFormula }, 
                     { f: sisaTenorFormula }, 
                     os, 
-                    { f: instFormula },   // Inst./Bulan via PMT Excel
+                    { f: instFormula },   // Inst./Bulan via Smart Hybrid Formula
                     { f: flatFormula },    // Int. Flat Mandiri
-                    { f: effFormula },     // Int. Eff Mandiri via RATE Excel
+                    { f: effFormula },     // Int. Eff Mandiri
                     lastCl, worstCl, ovdDays, denda
                 ];
 
