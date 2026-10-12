@@ -64,7 +64,7 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-slate-200">File Berhasil Diproses!</h3>
-                <p class="text-xs text-slate-400">Angsuran menggunakan Anuitas Standar OJK & Bunga Flat terhitung dinamis (~4,86%).</p>
+                <p class="text-xs text-slate-400">Angsuran, Bunga Flat, & Bunga Efektif dihitung mandiri menggunakan rumus Excel dinamis.</p>
 
                 <!-- Download Link Button -->
                 <div class="pt-2">
@@ -182,7 +182,7 @@
                 
                 const plafon = parseNum(row["PLAFON AWAL"]);
                 const os = parseNum(row["OUTSTANDING"]);
-                const intRate = parseNum(row["INT. (%)"]);
+                const intRateRaw = parseNum(row["INT. (%)"]) / 100 || 0.089;
                 const lastCl = parseNum(row["LAST CL."]) || 1;
                 const worstCl = parseNum(row["WORST CL."]) || 1;
                 const ovdDays = parseNum(row["OVD"] || row["OVD_DAYS"] || row["OVD DAYS"]);
@@ -212,7 +212,7 @@
                 const lowerFacType = rawFacType.toLowerCase();
 
                 // ----------------------------------------------------
-                // RUMUS EXCEL DINAMIS SESUAI REGULASI OJK
+                // RUMUS EXCEL DINAMIS & MANDIRI
                 // ----------------------------------------------------
                 const tenorFormula = `=IF(OR(D${r}="", E${r}=""), 0, (YEAR(DATEVALUE(E${r})) - YEAR(DATEVALUE(D${r}))) * 12 + MONTH(DATEVALUE(E${r})) - MONTH(DATEVALUE(D${r})))`;
                 const sisaTenorFormula = `=IF(OR(E${r}="", DATEVALUE(E${r})<=TODAY()), 0, DATEDIF(TODAY(), DATEVALUE(E${r}), "M"))`;
@@ -220,15 +220,16 @@
                 // Rumus Inst./Bulan (Kolom J)
                 let instFormula = "";
                 if (lowerFacType.includes("modal kerja") && tenorMonths <= 12) {
-                    // KMK Revolving <= 12 bln: Bunga Bulanan Saja = (OS * Rate) / 12
-                    instFormula = `=ROUND((I${r} * L${r}) / 12, 0)`;
+                    instFormula = `=ROUND((I${r} * ${intRateRaw}) / 12, 0)`;
                 } else {
-                    // Investasi / Konsumsi / Tenor > 12 bln: Anuitas Standar OJK = PMT(Rate/12, Tenor, -OS)
-                    instFormula = `=ROUND(IF(G${r}>0, PMT(L${r}/12, G${r}, -I${r}), 0), 0)`;
+                    instFormula = `=ROUND(IF(G${r}>0, PMT(${intRateRaw}/12, G${r}, -I${r}), 0), 0)`;
                 }
 
-                // Rumus Int. Flat (%) (Kolom K) - Ekuivalensi Bunga Flat dari Anuitas
+                // Rumus Int. Flat (%) Mandiri (Kolom K)
                 const flatFormula = `=IF(OR(I${r}=0, G${r}=0), 0, ((J${r} * G${r}) - I${r}) / I${r} * (12 / G${r}))`;
+
+                // Rumus Int. Eff (%) Mandiri via RATE Excel (Kolom L)
+                const effFormula = `=IF(OR(I${r}=0, G${r}=0, J${r}=0), 0, RATE(G${r}, -J${r}, I${r}) * 12)`;
 
                 const rowArray = [
                     ljk, rawFacType, condition, startDate, endDate, 
@@ -236,9 +237,9 @@
                     { f: tenorFormula }, 
                     { f: sisaTenorFormula }, 
                     os, 
-                    { f: instFormula },   // Inst./Bulan via Rumus PMT Excel Dinamis
-                    { f: flatFormula },    // Int. Flat via Rumus Excel Dinamis (~4,86%)
-                    intRate / 100,         // Int. Eff (%) (8,90%)
+                    { f: instFormula },   // Inst./Bulan via PMT Excel
+                    { f: flatFormula },    // Int. Flat Mandiri
+                    { f: effFormula },     // Int. Eff Mandiri via RATE Excel
                     lastCl, worstCl, ovdDays, denda
                 ];
 
